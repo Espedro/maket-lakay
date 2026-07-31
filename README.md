@@ -1,5 +1,11 @@
 # Maket Lakay
 
+![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-38bdf8?logo=tailwindcss)
+![Status](https://img.shields.io/badge/status-frontend_prototype-orange)
+![License](https://img.shields.io/badge/license-private-lightgrey)
+
 Maket Lakay is a frontend-only multi-vendor e-commerce marketplace prototype for Haiti and the Haitian diaspora. It includes a customer marketplace, simulated cart and checkout, customer account area, order tracking, vendor dashboard, admin dashboard, vendor application flow, and role switching.
 
 This project intentionally uses local data and browser localStorage only. It does not connect to a database, backend service, authentication provider, real payment provider, delivery API, or external marketplace API.
