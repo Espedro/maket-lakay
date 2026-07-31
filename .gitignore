@@ -1,0 +1,11 @@
+node_modules
+.next
+.next-stale-*
+.next-mixed-*
+out
+dist
+.env*.local
+*.tsbuildinfo
+pnpm-lock.yaml
+tmp/
+.DS_Store

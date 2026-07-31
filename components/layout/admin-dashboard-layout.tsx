@@ -1,0 +1,39 @@
+"use client";
+
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { useMockAuth } from "@/hooks/use-mock-auth";
+import type { MockRole } from "@/lib/mock-auth";
+import { adminNav, supportNav } from "@/lib/navigation";
+import { usePathname } from "next/navigation";
+
+interface AdminDashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+const supportAccessibleRoutes = ["/admin/support", "/admin/orders", "/admin/vendors", "/admin/products"];
+
+function getRequiredRoles(pathname: string): MockRole[] {
+  const supportCanAccess = supportAccessibleRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+
+  return supportCanAccess ? ["admin", "support"] : ["admin"];
+}
+
+export function AdminDashboardLayout({ children }: AdminDashboardLayoutProps) {
+  const pathname = usePathname();
+  const { currentUser } = useMockAuth();
+  const requiredRoles = getRequiredRoles(pathname);
+  const isSupportContext = currentUser.role === "support" && requiredRoles.includes("support");
+
+  return (
+    <DashboardShell
+      title={isSupportContext ? "Support Dashboard" : "Admin Dashboard"}
+      eyebrow={isSupportContext ? "Support" : "Admin"}
+      navItems={isSupportContext ? supportNav : adminNav}
+      requiredRole={requiredRoles}
+    >
+      {children}
+    </DashboardShell>
+  );
+}
