@@ -57,7 +57,7 @@ export function Footer() {
       </div>
       <div className="border-t py-4">
         <div className="container text-sm text-muted-foreground">
-          Copyright 2026 Maket Lakay. Frontend foundation only.
+          Copyright 2026 Maket Lakay.
         </div>
       </div>
     </footer>
