@@ -9,3 +9,5 @@ dist
 pnpm-lock.yaml
 tmp/
 .DS_Store
+.vercel
+.env*

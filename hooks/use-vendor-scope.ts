@@ -4,26 +4,24 @@ import * as React from "react";
 
 import { stores as staticStores } from "@/data/mock-data";
 import { useAdminManagement } from "@/hooks/use-admin-management";
-import { useMockAuth } from "@/hooks/use-mock-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { getAllStores } from "@/lib/admin-management";
 
 export function useVendorScope() {
-  const auth = useMockAuth();
+  const auth = useAuth();
   const { isReady: adminReady, state: adminState } = useAdminManagement();
 
   const allStores = React.useMemo(() => getAllStores(adminState), [adminState]);
-  const vendorId =
-    auth.currentUser.vendorId ??
-    (auth.currentUser.role === "vendor" ? auth.currentUser.id : undefined);
+  const vendorId = auth.user?.vendorId;
   const scopedStores = React.useMemo(() => {
-    if (auth.currentUser.role !== "vendor" || !vendorId) {
+    if (auth.user?.role !== "vendor" || !vendorId) {
       return allStores;
     }
 
     return allStores.filter((store) => store.vendorId === vendorId);
-  }, [allStores, auth.currentUser.role, vendorId]);
+  }, [allStores, auth.user?.role, vendorId]);
   const defaultStoreId =
-    auth.currentUser.storeId ??
+    auth.user?.storeId ??
     scopedStores[0]?.id ??
     allStores[0]?.id ??
     staticStores[0]?.id ??

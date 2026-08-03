@@ -41,7 +41,7 @@ import {
   getStoreByOrder,
 } from "@/lib/account";
 import { EmptyState } from "@/components/marketplace/empty-state";
-import { MockAccountMenu } from "@/components/auth/mock-account-menu";
+import { AccountMenu } from "@/components/auth/account-menu";
 import { RatingStars } from "@/components/marketplace/rating-stars";
 import { StatusBadge } from "@/components/marketplace/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +55,7 @@ import {
   stores,
 } from "@/data/mock-data";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
-import { useMockAuth } from "@/hooks/use-mock-auth";
+import { useAuth, type AuthUser } from "@/hooks/use-auth";
 import { toast } from "@/hooks/use-toast";
 import { getOrderTrackingEvents, mergeOrders } from "@/lib/orders";
 import {
@@ -74,7 +74,6 @@ import type {
   Review,
   StoreReview,
 } from "@/types";
-import type { MockUser } from "@/lib/mock-auth";
 
 type AccountView =
   | "overview"
@@ -153,15 +152,15 @@ function getInitials(profile: AccountProfile) {
   return `${profile.firstName[0] ?? "J"}${profile.lastName[0] ?? "B"}`.toUpperCase();
 }
 
-function getAccountProfileFromUser(user: MockUser): AccountProfile {
-  if (user.customerId === activeCustomer.id || user.id === activeCustomer.id) {
+function getAccountProfileFromUser(user: AuthUser): AccountProfile {
+  if (user.id === activeCustomer.id) {
     return defaultAccountProfile;
   }
 
   const [firstName = user.name, ...lastNameParts] = user.name.split(/\s+/);
 
   return {
-    id: user.customerId ?? user.id,
+    id: user.id,
     firstName,
     lastName: lastNameParts.join(" ") || user.roleLabel,
     email: user.email,
@@ -187,7 +186,7 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
     toggleWishlist,
     wishlist,
   } = useMarketplaceStorage();
-  const { currentCustomerId, currentUser, isReady: authReady, switchRole } = useMockAuth();
+  const { user: currentUser, isReady: authReady } = useAuth();
   const [profile, setProfile] = React.useState<AccountProfile>({
     ...defaultAccountProfile,
     preferredLanguage: defaultAccountProfile.preferredLanguage,
@@ -196,7 +195,7 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
   const [readNotificationIds, setReadNotificationIds] = React.useState<string[]>([]);
   const [settings, setSettings] = React.useState<AccountSettings>(defaultSettings);
   const [accountReady, setAccountReady] = React.useState(false);
-  const activeAccountId = currentCustomerId ?? currentUser.id;
+  const activeAccountId = currentUser?.id ?? "";
   const profileStorageKey = getScopedStorageKey(ACCOUNT_PROFILE_KEY, activeAccountId);
   const addressesStorageKey = getScopedStorageKey(ACCOUNT_ADDRESSES_KEY, activeAccountId);
   const notificationReadStorageKey = getScopedStorageKey(
@@ -206,7 +205,7 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
   const settingsStorageKey = getScopedStorageKey(ACCOUNT_SETTINGS_KEY, activeAccountId);
 
   React.useEffect(() => {
-    if (!authReady) return;
+    if (!authReady || !currentUser) return;
 
     const baseProfile = getAccountProfileFromUser(currentUser);
 
@@ -306,6 +305,33 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
     );
   }
 
+  if (!currentUser) {
+    return (
+      <section className="grid min-h-[420px] place-items-center border bg-white p-5 text-center">
+        <div className="max-w-xl border border-primary/30 bg-primary/5 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-primary">
+            Log in required
+          </p>
+          <h1 className="mt-3 text-3xl font-black tracking-normal">
+            Log in to view your account.
+          </h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            Customer profile, order history, wishlist, notifications, and saved addresses require
+            a signed-in account.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <Button asChild>
+              <Link href="/login">Log in</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/signup">Sign up</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (currentUser.role !== "customer") {
     return (
       <section className="grid min-h-[420px] place-items-center border bg-white p-5 text-center">
@@ -314,17 +340,14 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
             Customer access
           </p>
           <h1 className="mt-3 text-3xl font-black tracking-normal">
-            Switch to a customer profile to view this account area.
+            This account area is for customer accounts.
           </h1>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            You are currently previewing as {currentUser.roleLabel}. Customer profile, order
-            history, wishlist, notifications, and saved addresses are scoped to customer accounts.
+            Your account is signed in as {currentUser.roleLabel}. Order history, wishlist,
+            notifications, and saved addresses are scoped to customer accounts.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-2">
-            <Button type="button" onClick={() => switchRole("customer")}>
-              Switch to Customer
-            </Button>
-            <Button asChild variant="outline">
+            <Button asChild>
               <Link href={currentUser.homeHref}>Go to my area</Link>
             </Button>
           </div>
@@ -1152,7 +1175,7 @@ function SettingsPanel({
   onChange: (settings: AccountSettings) => void;
   settings: AccountSettings;
 }) {
-  const { currentUser, isReady, switchRole } = useMockAuth();
+  const { user: currentUser, isReady } = useAuth();
 
   function toggle(key: keyof AccountSettings) {
     const nextSettings = { ...settings, [key]: !settings[key] };
@@ -1164,7 +1187,7 @@ function SettingsPanel({
     <section className="border bg-white p-5">
       <h1 className="text-3xl font-black tracking-normal">Account settings</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Simulated notification and account preferences. No backend is connected.
+        Simulated notification preferences. Account access is backed by Supabase Auth.
       </p>
       <div className="mt-5 divide-y border">
         <SettingToggle label="Order notifications" checked={settings.orderAlerts} onChange={() => toggle("orderAlerts")} />
@@ -1184,24 +1207,12 @@ function SettingsPanel({
           <UserRound className="size-5 text-primary" />
           <h2 className="mt-3 font-black">Account access</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            {isReady
-              ? `Currently previewing as ${currentUser.name} (${currentUser.roleLabel}).`
-              : "Sign-in and identity controls are mocked for this frontend phase."}
+            {isReady && currentUser
+              ? `Signed in as ${currentUser.name} (${currentUser.roleLabel}).`
+              : "Not signed in."}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <MockAccountMenu dashboard />
-            <Button type="button" variant="outline" onClick={() => switchRole("customer")}>
-              Customer
-            </Button>
-            <Button type="button" variant="outline" onClick={() => switchRole("vendor")}>
-              Vendor
-            </Button>
-            <Button type="button" variant="outline" onClick={() => switchRole("support")}>
-              Support Staff
-            </Button>
-            <Button type="button" variant="outline" onClick={() => switchRole("admin")}>
-              Admin
-            </Button>
+            <AccountMenu dashboard />
           </div>
         </div>
       </div>

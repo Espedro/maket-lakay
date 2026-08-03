@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { products, stores, vendors } from "@/data/mock-data";
-import { useMockAuth } from "@/hooks/use-mock-auth";
+import { useAuth } from "@/hooks/use-auth";
 import { toast } from "@/hooks/use-toast";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import { addAuditLogEntry } from "@/lib/audit-log";
@@ -130,9 +130,9 @@ export function SupportCenterClient() {
     saveRefundRequest,
     saveSupportTicket,
   } = useMarketplaceStorage();
-  const { currentCustomerId, currentUser, isReady: authReady, switchRole } = useMockAuth();
-  const activeCustomerId = currentCustomerId ?? currentUser.id;
-  const activeCustomerName = currentUser.name;
+  const { user: currentUser, isReady: authReady } = useAuth();
+  const activeCustomerId = currentUser?.id ?? "";
+  const activeCustomerName = currentUser?.name ?? "";
   const orders = mergeOrders(localOrders).filter((order) => order.customerId === activeCustomerId);
   const supportTickets = mergeSupportTickets(localSupportTickets);
   const refundRequests = mergeRefundRequests(localRefundRequests);
@@ -385,6 +385,32 @@ export function SupportCenterClient() {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 
+  if (!currentUser) {
+    return (
+      <div className="space-y-6">
+        <section className="border bg-white p-5">
+          <div className="flex items-center gap-3">
+            <LifeBuoy className="size-8 text-primary" />
+            <div>
+              <h1 className="text-3xl font-black tracking-normal">Support center</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Log in to open tickets and track replies.
+              </p>
+            </div>
+          </div>
+        </section>
+        <EmptyState
+          icon={ShieldCheck}
+          title="Log in required"
+          description="Customer support tickets require a signed-in account."
+        />
+        <Button asChild>
+          <Link href="/login">Log in</Link>
+        </Button>
+      </div>
+    );
+  }
+
   if (currentUser.role !== "customer") {
     return (
       <div className="space-y-6">
@@ -401,11 +427,11 @@ export function SupportCenterClient() {
         </section>
         <EmptyState
           icon={ShieldCheck}
-          title="Switch to a customer profile"
+          title="Customer accounts only"
           description="Support staff and admins should use the dashboard queue. Customers can open tickets, track replies, and follow dispute updates here."
         />
-        <Button type="button" onClick={() => switchRole("customer")}>
-          Switch to customer
+        <Button asChild>
+          <Link href={currentUser.homeHref}>Go to my area</Link>
         </Button>
       </div>
     );

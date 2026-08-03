@@ -1,8 +1,8 @@
 "use client";
 
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { useMockAuth } from "@/hooks/use-mock-auth";
-import type { MockRole } from "@/lib/mock-auth";
+import { useAuth } from "@/hooks/use-auth";
+import type { AppRole } from "@/lib/auth-roles";
 import { adminNav, supportNav } from "@/lib/navigation";
 import { usePathname } from "next/navigation";
 
@@ -12,7 +12,7 @@ interface AdminDashboardLayoutProps {
 
 const supportAccessibleRoutes = ["/admin/support", "/admin/orders", "/admin/vendors", "/admin/products"];
 
-function getRequiredRoles(pathname: string): MockRole[] {
+function getRequiredRoles(pathname: string): AppRole[] {
   const supportCanAccess = supportAccessibleRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
@@ -22,9 +22,9 @@ function getRequiredRoles(pathname: string): MockRole[] {
 
 export function AdminDashboardLayout({ children }: AdminDashboardLayoutProps) {
   const pathname = usePathname();
-  const { currentUser } = useMockAuth();
+  const { user } = useAuth();
   const requiredRoles = getRequiredRoles(pathname);
-  const isSupportContext = currentUser.role === "support" && requiredRoles.includes("support");
+  const isSupportContext = user?.role === "support" && requiredRoles.includes("support");
 
   return (
     <DashboardShell

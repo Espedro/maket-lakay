@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell, Menu, X } from "lucide-react";
 import * as React from "react";
 
-import { MockAccountMenu } from "@/components/auth/mock-account-menu";
+import { AccountMenu } from "@/components/auth/account-menu";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,10 +17,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { notifications } from "@/data/mock-data";
 import { useAdminPayoutRequests } from "@/hooks/use-admin-payout-requests";
+import { useAuth } from "@/hooks/use-auth";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
-import { useMockAuth } from "@/hooks/use-mock-auth";
 import { useVendorScope } from "@/hooks/use-vendor-scope";
-import { getRoleHomeHref, getRoleLabel, type MockRole } from "@/lib/mock-auth";
+import { getRoleHomeHref, getRoleLabel, type AppRole } from "@/lib/auth-roles";
 import { mergeOrders } from "@/lib/orders";
 import {
   mergeDisputes,
@@ -41,7 +41,7 @@ interface DashboardShellProps {
   title: string;
   eyebrow: string;
   navItems: DashboardNavItem[];
-  requiredRole: MockRole | MockRole[];
+  requiredRole: AppRole | AppRole[];
   children: React.ReactNode;
 }
 
@@ -53,7 +53,14 @@ export function DashboardShell({
   children,
 }: DashboardShellProps) {
   const pathname = usePathname();
-  const { currentUser, isReady, switchRole } = useMockAuth();
+  const router = useRouter();
+  const { user, isReady } = useAuth();
+
+  React.useEffect(() => {
+    if (isReady && !user) {
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+    }
+  }, [isReady, user, router, pathname]);
   const {
     localDisputes,
     localOrders,
@@ -113,17 +120,24 @@ export function DashboardShell({
     "/vendor/payout-requests": vendorPayoutCount,
   };
   const roleActionCount =
-    currentUser.role === "admin"
+    user?.role === "admin"
       ? supportQueueCount + escalationCount + payoutReviewCount
-      : currentUser.role === "support"
+      : user?.role === "support"
         ? supportQueueCount
-        : currentUser.role === "vendor"
+        : user?.role === "vendor"
           ? vendorTicketCount + vendorDisputeCount + vendorOrderCount + vendorPayoutCount
           : 0;
   const unreadCount = notifications.filter((notification) => !notification.read).length + roleActionCount;
   const allowedRoles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
-  const primaryRole = allowedRoles[0];
-  const hasRoleMismatch = isReady && !allowedRoles.includes(currentUser.role);
+  const hasRoleMismatch = isReady && Boolean(user) && !allowedRoles.includes(user!.role);
+
+  if (!isReady || !user) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-background">
+        <div className="size-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   const SidebarContent = (
     <div className="flex h-full flex-col">
@@ -263,7 +277,7 @@ export function DashboardShell({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <MockAccountMenu dashboard />
+            <AccountMenu dashboard />
           </div>
         </header>
         <main className="min-w-0 px-4 py-6 sm:px-6 lg:px-8">
@@ -277,15 +291,12 @@ export function DashboardShell({
                   This area is for {allowedRoles.map((role) => getRoleLabel(role)).join(" or ")} users.
                 </h2>
                 <p className="mt-3 text-muted-foreground">
-                  You are currently previewing as {currentUser.roleLabel}. Switch roles or return to
-                  the correct dashboard area.
+                  Your account is signed in as {user?.roleLabel}. This area needs{" "}
+                  {allowedRoles.map((role) => getRoleLabel(role)).join(" or ")} access.
                 </p>
                 <div className="mt-5 flex flex-wrap justify-center gap-2">
-                  <Button type="button" onClick={() => switchRole(primaryRole)}>
-                    Switch to {getRoleLabel(primaryRole)}
-                  </Button>
-                  <Button asChild variant="outline">
-                    <Link href={getRoleHomeHref(currentUser.role)}>Go to my area</Link>
+                  <Button asChild>
+                    <Link href={getRoleHomeHref(user?.role ?? "customer")}>Go to my area</Link>
                   </Button>
                 </div>
               </div>

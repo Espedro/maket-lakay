@@ -1,17 +1,17 @@
 "use client";
 
-import { useMockAuth } from "@/hooks/use-mock-auth";
+import { useAuth } from "@/hooks/use-auth";
 
 export function HeaderAccountSummary() {
-  const { currentUser, isReady } = useMockAuth();
+  const { user, isReady } = useAuth();
 
   return (
     <div className="hidden leading-tight xl:block">
       <p className="text-xs text-white/70">
-        {isReady ? `Hello, ${currentUser.name.split(" ")[0]}` : "Hello"}
+        {isReady && user ? `Hello, ${user.name.split(" ")[0]}` : "Hello"}
       </p>
       <p className="text-sm font-bold">
-        Switch role: {isReady ? currentUser.roleLabel : "Account"}
+        {isReady && user ? user.roleLabel : "Log in"}
       </p>
     </div>
   );

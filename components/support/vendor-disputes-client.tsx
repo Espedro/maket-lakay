@@ -144,7 +144,7 @@ export function VendorDisputesClient() {
 
     const updatedTicket = appendTicketMessage(selectedTicket, {
       authorType: "vendor",
-      authorName: auth.currentUser.name,
+      authorName: auth.user?.name ?? "",
       body: values.message,
       visibility: "customer_visible",
     });
@@ -156,8 +156,8 @@ export function VendorDisputesClient() {
       description: `${selectedTicket.id} was updated for support and the customer.`,
     });
     addAuditLogEntry({
-      actorId: auth.currentUser.id,
-      actorName: auth.currentUser.name,
+      actorId: auth.user?.id ?? "",
+      actorName: auth.user?.name ?? "",
       actorRole: "vendor",
       action: "vendor.support_reply_sent",
       entityType: "support_ticket",
@@ -173,7 +173,7 @@ export function VendorDisputesClient() {
 
     const updatedDispute = appendDisputeEvidence(selectedDispute, {
       authorType: "vendor",
-      authorName: auth.currentUser.name,
+      authorName: auth.user?.name ?? "",
       title: values.title,
       notes: values.notes,
       imagePreviewUrl: evidencePhotoPreview || undefined,
@@ -189,8 +189,8 @@ export function VendorDisputesClient() {
       description: `${selectedDispute.id} now includes vendor evidence.`,
     });
     addAuditLogEntry({
-      actorId: auth.currentUser.id,
-      actorName: auth.currentUser.name,
+      actorId: auth.user?.id ?? "",
+      actorName: auth.user?.name ?? "",
       actorRole: "vendor",
       action: "vendor.dispute_evidence_added",
       entityType: "dispute",

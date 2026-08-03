@@ -3,7 +3,7 @@
 import { Heart, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 
-import { MockAccountMenu } from "@/components/auth/mock-account-menu";
+import { AccountMenu } from "@/components/auth/account-menu";
 import { Button } from "@/components/ui/button";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 
@@ -27,7 +27,7 @@ export function HeaderActions() {
           ) : null}
         </Link>
       </Button>
-      <MockAccountMenu compact showRoleLabel />
+      <AccountMenu compact showRoleLabel />
       <Button asChild size="icon" className="relative bg-lakay-mango text-slate-950 hover:bg-lakay-mango/90">
         <Link href="/cart" aria-label="Shopping bag">
           <ShoppingBag className="size-5" />

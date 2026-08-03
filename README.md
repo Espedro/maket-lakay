@@ -144,13 +144,12 @@ Common keys include:
 - `maket-lakay-admin-operations`
 - `maket-lakay-account-profile`
 - `maket-lakay-account-addresses`
-- `maket-lakay-mock-session`
 
 All persistence is local to the browser.
 
 ## Frontend Access Flow
 
-The app includes a frontend-only role switcher in the header and dashboard profile menus. It stores the selected preview user in `maket-lakay-mock-session`.
+Authentication is real, backed by Supabase Auth (`/login`, `/signup`). A `profiles` row (with a `role` of `customer`, `vendor`, `admin`, or `support`) is created automatically for every new account via a database trigger.
 
 Supported roles:
 
@@ -158,9 +157,9 @@ Supported roles:
 - Vendor: vendor dashboard, products, inventory, orders, earnings, payouts, settings
 - Admin: vendor approvals, moderation, users, orders, delivery, refunds, reports
 
-Dashboard layouts show an access mismatch banner when the selected role does not match the area. This is a UX simulation only; it is not authentication or authorization.
+Dashboard layouts (`/admin`, `/vendor`) redirect signed-out visitors to `/login` and show an access-denied banner when a signed-in account's role does not match the area. New signups default to the `customer` role; vendor and admin access is granted by updating `profiles.role` (and, for vendors, an owning row in `vendors`/`stores`) directly for now — there is no self-serve elevation flow yet.
 
-Vendor applications submitted through `/sell` are stored in `maket-lakay-admin-management`. When an admin approves an application, the app creates a local vendor, store, and vendor staff user. Approved stores appear in marketplace store lists and vendor dashboard selectors.
+Vendor applications submitted through `/sell` are stored in `maket-lakay-admin-management`. When an admin approves an application, the app creates a local vendor, store, and vendor staff user. Approved stores appear in marketplace store lists and vendor dashboard selectors. This flow still runs on local mock data and is not yet connected to the real `vendors`/`stores` tables in Supabase.
 
 Checkout also includes a declined test payment option. Failed payments save local payment records and webhook events, show a retry state, and do not create orders.
 
