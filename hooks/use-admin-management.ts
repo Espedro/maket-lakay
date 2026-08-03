@@ -5,11 +5,13 @@ import * as React from "react";
 import { toast } from "@/hooks/use-toast";
 import { addAuditLogEntry } from "@/lib/audit-log";
 import { readLocalJson, writeLocalJson } from "@/lib/local-storage";
+import { createClient } from "@/lib/supabase/client";
 import {
   ADMIN_MANAGEMENT_KEY,
   getApprovedStoreId,
   getApprovedVendorId,
   hydrateAdminManagementState,
+  slugify,
   type AdminAccountStatus,
   type AdminManagementState,
   type AdminStoreStatus,
@@ -31,6 +33,61 @@ function readState(): AdminManagementState {
 
 function writeState(state: AdminManagementState) {
   writeLocalJson(ADMIN_MANAGEMENT_KEY, state, STORAGE_EVENT);
+}
+
+async function createRealVendorAccount(application: VendorApplication) {
+  if (!application.applicantProfileId) {
+    return { ok: false as const, reason: "Application has no linked account to promote." };
+  }
+
+  const supabase = createClient();
+  const baseSlug = slugify(application.storeSlug || application.businessName || application.id);
+  const uniqueSlug = `${baseSlug || "store"}-${Math.random().toString(36).slice(2, 6)}`;
+
+  const { data: vendorRow, error: vendorError } = await supabase
+    .from("vendors")
+    .insert({
+      owner_profile_id: application.applicantProfileId,
+      name: application.businessName,
+      owner_name: application.ownerName,
+      email: application.email,
+      phone: application.phone,
+      city: application.commune || application.city,
+      country: "Haiti",
+      verification_status: "verified",
+    })
+    .select("id")
+    .single();
+
+  if (vendorError || !vendorRow) {
+    return { ok: false as const, reason: vendorError?.message ?? "Could not create vendor record." };
+  }
+
+  const { error: storeError } = await supabase.from("stores").insert({
+    vendor_id: vendorRow.id,
+    name: application.businessName,
+    slug: uniqueSlug,
+    description: application.description,
+    city: application.commune || application.city,
+    country: "Haiti",
+    banner_color: application.brandColor || null,
+    verified: true,
+  });
+
+  if (storeError) {
+    return { ok: false as const, reason: storeError.message };
+  }
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ role: "vendor" })
+    .eq("id", application.applicantProfileId);
+
+  if (profileError) {
+    return { ok: false as const, reason: profileError.message };
+  }
+
+  return { ok: true as const };
 }
 
 export function useAdminManagement() {
@@ -186,12 +243,17 @@ export function useAdminManagement() {
   );
 
   const updateVendorApplicationStatus = React.useCallback(
-    (applicationId: string, status: VendorApplicationStatus, message: string) => {
+    async (applicationId: string, status: VendorApplicationStatus, message: string) => {
       const nextState = readState();
       const applicationToUpdate = nextState.vendorApplications.find(
         (application) => application.id === applicationId,
       );
       const oldStatus = applicationToUpdate?.status;
+      let realAccountResult: { ok: boolean; reason?: string } | null = null;
+
+      if (status === "approved" && applicationToUpdate && oldStatus !== "approved") {
+        realAccountResult = await createRealVendorAccount(applicationToUpdate);
+      }
 
       nextState.vendorApplications = nextState.vendorApplications.map((application) =>
         application.id === applicationId
@@ -253,7 +315,23 @@ export function useAdminManagement() {
         newValue: status,
         severity: status === "rejected" ? "warning" : "info",
       });
-      toast({ title: "Application updated", description: message });
+
+      if (realAccountResult && !realAccountResult.ok) {
+        toast({
+          title: "Application approved, vendor account setup failed",
+          description:
+            realAccountResult.reason ??
+            "The application was approved locally, but the real vendor account could not be created.",
+          variant: "destructive",
+        });
+      } else if (realAccountResult?.ok) {
+        toast({
+          title: "Vendor account created",
+          description: `${applicationToUpdate?.businessName} now has a real vendor account and store.`,
+        });
+      } else {
+        toast({ title: "Application updated", description: message });
+      }
     },
     [saveState],
   );

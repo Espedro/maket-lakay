@@ -38,6 +38,7 @@ export interface AdminUserRecord {
 
 export interface VendorApplication {
   id: string;
+  applicantProfileId?: string;
   businessName: string;
   businessType?: string;
   ownerName: string;
@@ -210,7 +211,7 @@ export function getVendorSales(vendorId: string, totalsByStore: Record<string, n
   return getVendorStores(vendorId).reduce((sum, store) => sum + (totalsByStore[store.id] ?? 0), 0);
 }
 
-function slugify(value: string) {
+export function slugify(value: string) {
   return value
     .toLowerCase()
     .trim()

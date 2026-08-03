@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAdminManagement } from "@/hooks/use-admin-management";
+import { useAuth } from "@/hooks/use-auth";
 import {
   vendorApplicationSchema,
   type VendorApplicationInput,
@@ -172,6 +173,7 @@ function fileToDataUrl(file: File) {
 
 export function VendorApplicationClient() {
   const { isReady, submitVendorApplication } = useAdminManagement();
+  const { user, isReady: authReady } = useAuth();
   const [currentStep, setCurrentStep] = React.useState(0);
   const [submittedApplication, setSubmittedApplication] =
     React.useState<VendorApplication | null>(null);
@@ -281,7 +283,9 @@ export function VendorApplicationClient() {
   }
 
   function onSubmit(values: VendorApplicationInput) {
-    const application = submitVendorApplication(values);
+    if (!user) return;
+
+    const application = submitVendorApplication({ ...values, applicantProfileId: user.id });
 
     if (application) {
       setSubmittedApplication(application);
@@ -358,7 +362,7 @@ export function VendorApplicationClient() {
     );
   }
 
-  if (!isReady) {
+  if (!isReady || !authReady) {
     return (
       <div className="container py-8">
         <div className="h-8 w-48 animate-pulse bg-muted" />
@@ -366,6 +370,29 @@ export function VendorApplicationClient() {
           <div className="h-80 animate-pulse border bg-muted" />
           <div className="h-[520px] animate-pulse border bg-muted" />
         </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="container py-16">
+        <section className="mx-auto grid max-w-xl place-items-center border bg-white p-8 text-center">
+          <ShieldCheck className="size-8 text-primary" />
+          <h1 className="mt-3 text-3xl font-black tracking-normal">Log in to apply</h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            Vendor applications are linked to your account so an approved application can turn
+            into a real vendor account. Log in or create an account to continue.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <Button asChild>
+              <Link href="/login">Log in</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/signup">Sign up</Link>
+            </Button>
+          </div>
+        </section>
       </div>
     );
   }
@@ -414,11 +441,12 @@ export function VendorApplicationClient() {
             <div className="border bg-primary/5 p-4 text-sm leading-6">
               <div className="flex items-center gap-2 font-black">
                 <ShieldCheck className="size-4 text-primary" />
-                Frontend-only demo
+                Review is local, approval is real
               </div>
               <p className="mt-2 text-muted-foreground">
-                This creates a local application in your browser. No backend,
-                database, document storage, or real verification service is connected.
+                The application itself is tracked in this browser for admin review. Once
+                approved, a real vendor account and store are created on your account —
+                document storage and identity verification are not yet connected.
               </p>
             </div>
           </div>
