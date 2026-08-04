@@ -36,7 +36,7 @@ import {
   updateOrderStatus,
 } from "@/lib/orders";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { getRealOrdersByStore } from "@/services/orders";
+import { getRealOrdersByStore, updateRealOrderStatus } from "@/services/orders";
 import type { Order, OrderStatus, PaymentRecord, Store } from "@/types";
 
 type OrderFilter = OrderStatus | "all";
@@ -142,7 +142,7 @@ export function VendorOrdersClient() {
     }
   }, [scopedStores, storeFilter]);
 
-  function saveStatus(order: Order, status: OrderStatus) {
+  async function saveStatus(order: Order, status: OrderStatus) {
     let nextOrder = updateOrderStatus(order, status);
 
     if (status === "ready_for_delivery" && !order.deliveryAssignmentId) {
@@ -166,6 +166,17 @@ export function VendorOrdersClient() {
 
     saveLocalOrder(nextOrder);
     saveCustomerNotification(createCustomerNotification(nextOrder, status));
+    const realResult = await updateRealOrderStatus(order.id, status);
+
+    if (!realResult.ok) {
+      toast({
+        title: "Order updated locally only",
+        description: realResult.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
     toast({
       title: "Order updated",
       description: `${order.id} moved to ${status.replaceAll("_", " ")}.`,

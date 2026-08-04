@@ -25,7 +25,7 @@ import {
   updateOrderStatus,
 } from "@/lib/orders";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { getAllRealOrders } from "@/services/orders";
+import { getAllRealOrders, updateRealOrderStatus } from "@/services/orders";
 import type { Order, OrderStatus, RefundRecord } from "@/types";
 
 interface AdminOrderDetailsClientProps {
@@ -125,7 +125,7 @@ export function AdminOrderDetailsClient({ orderId }: AdminOrderDetailsClientProp
     });
   }
 
-  function confirmAction() {
+  async function confirmAction() {
     if (!pendingAction) return;
 
     if (pendingAction.type === "review") {
@@ -136,10 +136,19 @@ export function AdminOrderDetailsClient({ orderId }: AdminOrderDetailsClientProp
       const nextOrder = updateOrderStatus(pendingAction.order, "cancelled");
       saveLocalOrder(nextOrder);
       saveCustomerNotification(createCustomerNotification(nextOrder, "cancelled"));
-      toast({
-        title: "Order cancelled",
-        description: `${pendingAction.order.id} was cancelled locally.`,
-      });
+      const realResult = await updateRealOrderStatus(pendingAction.order.id, "cancelled");
+      if (!realResult.ok) {
+        toast({
+          title: "Order cancelled locally only",
+          description: realResult.reason,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Order cancelled",
+          description: `${pendingAction.order.id} was cancelled.`,
+        });
+      }
     }
 
     if (pendingAction.type === "refund") {
@@ -150,10 +159,19 @@ export function AdminOrderDetailsClient({ orderId }: AdminOrderDetailsClientProp
       const nextOrder = updateOrderStatus(pendingAction.order, pendingAction.status);
       saveLocalOrder(nextOrder);
       saveCustomerNotification(createCustomerNotification(nextOrder, pendingAction.status));
-      toast({
-        title: "Delivery status updated",
-        description: `${pendingAction.order.id} is now ${ORDER_STATUS_LABELS[pendingAction.status]}.`,
-      });
+      const realResult = await updateRealOrderStatus(pendingAction.order.id, pendingAction.status);
+      if (!realResult.ok) {
+        toast({
+          title: "Status updated locally only",
+          description: realResult.reason,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Delivery status updated",
+          description: `${pendingAction.order.id} is now ${ORDER_STATUS_LABELS[pendingAction.status]}.`,
+        });
+      }
     }
 
     setPendingAction(null);

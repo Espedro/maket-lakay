@@ -102,3 +102,19 @@ export async function getAllRealOrders(): Promise<Order[]> {
 
   return data.map(mapOrderRow);
 }
+
+/**
+ * Admin-only (RLS). Silently affects 0 rows if orderId doesn't exist as a
+ * real order (e.g. a mock/demo order id) — safe to call as a best-effort
+ * dual write alongside the existing local order-status update.
+ */
+export async function updateRealOrderStatus(orderId: string, status: OrderStatus) {
+  const supabase = createClient();
+  const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
+
+  if (error) {
+    return { ok: false as const, reason: error.message };
+  }
+
+  return { ok: true as const };
+}
