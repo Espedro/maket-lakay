@@ -69,6 +69,62 @@ export async function createRealPayoutRequest(request: PayoutRequest, storeId: s
   return { ok: true as const };
 }
 
+export interface RealWalletSummary {
+  availableBalance: number;
+  pendingBalance: number;
+  lifetimeSales: number;
+  lifetimeCommission: number;
+  currency: "USD" | "HTG";
+}
+
+const RESERVED_PAYOUT_STATUSES = new Set(["requested", "processing", "paid"]);
+
+/**
+ * Derives the vendor's balance from real orders + payout requests instead of
+ * a separately-maintained counter, so it can never drift out of sync:
+ *  - lifetime sales/commission: all non-cancelled orders
+ *  - pending balance: net revenue from orders still "pending" (not yet confirmed)
+ *  - available balance: net revenue from confirmed+ orders, minus anything
+ *    already requested/processing/paid out (so a vendor can't over-request)
+ */
+export async function getRealWalletSummary(storeId: string): Promise<RealWalletSummary> {
+  const supabase = createClient();
+  const [ordersResult, payoutsResult] = await Promise.all([
+    supabase.from("orders").select("status, subtotal").eq("store_id", storeId),
+    supabase.from("payout_requests").select("amount, status").eq("store_id", storeId),
+  ]);
+
+  if (ordersResult.error || payoutsResult.error || !ordersResult.data || !payoutsResult.data) {
+    return { availableBalance: 0, pendingBalance: 0, lifetimeSales: 0, lifetimeCommission: 0, currency: "USD" };
+  }
+
+  const activeOrders = ordersResult.data.filter((order) => order.status !== "cancelled");
+  const netOf = (subtotal: number) => subtotal - calculateCommission(subtotal);
+
+  const lifetimeSales = activeOrders.reduce((sum, order) => sum + Number(order.subtotal), 0);
+  const lifetimeCommission = activeOrders.reduce(
+    (sum, order) => sum + calculateCommission(Number(order.subtotal)),
+    0,
+  );
+  const pendingBalance = activeOrders
+    .filter((order) => order.status === "pending")
+    .reduce((sum, order) => sum + netOf(Number(order.subtotal)), 0);
+  const grossAvailable = activeOrders
+    .filter((order) => order.status !== "pending")
+    .reduce((sum, order) => sum + netOf(Number(order.subtotal)), 0);
+  const reservedByPayouts = payoutsResult.data
+    .filter((request) => RESERVED_PAYOUT_STATUSES.has(request.status))
+    .reduce((sum, request) => sum + Number(request.amount), 0);
+
+  return {
+    availableBalance: Math.max(0, grossAvailable - reservedByPayouts),
+    pendingBalance: Math.max(0, pendingBalance),
+    lifetimeSales,
+    lifetimeCommission,
+    currency: "USD",
+  };
+}
+
 export async function getRealEarningsTransactions(storeId: string): Promise<EarningsTransaction[]> {
   const supabase = createClient();
   const { data, error } = await supabase

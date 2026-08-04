@@ -15,16 +15,20 @@ import { CircleDollarSign, HandCoins, Percent, WalletCards } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useVendorScope } from "@/hooks/use-vendor-scope";
-import { getWalletForStore, type EarningsTransaction } from "@/lib/vendor-commerce";
+import type { EarningsTransaction } from "@/lib/vendor-commerce";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { getRealEarningsTransactions } from "@/services/vendor-commerce";
+import {
+  getRealEarningsTransactions,
+  getRealWalletSummary,
+  type RealWalletSummary,
+} from "@/services/vendor-commerce";
 
 type DateFilter = "7d" | "30d" | "all";
 
 function getFilteredTransactions(transactions: EarningsTransaction[], filter: DateFilter) {
   if (filter === "all") return transactions;
 
-  const now = new Date("2026-07-20T12:00:00Z").getTime();
+  const now = Date.now();
   const days = filter === "7d" ? 7 : 30;
   const threshold = now - days * 24 * 60 * 60 * 1000;
 
@@ -51,12 +55,13 @@ export function EarningsClient() {
   const [storeId, setStoreId] = React.useState(defaultStoreId);
   const [filter, setFilter] = React.useState<DateFilter>("30d");
   const [allTransactions, setAllTransactions] = React.useState<EarningsTransaction[]>([]);
+  const [wallet, setWallet] = React.useState<RealWalletSummary | null>(null);
   const [transactionsReady, setTransactionsReady] = React.useState(false);
-  const wallet = getWalletForStore(storeId);
 
   React.useEffect(() => {
     if (!storeId) {
       setAllTransactions([]);
+      setWallet(null);
       setTransactionsReady(true);
       return;
     }
@@ -64,12 +69,15 @@ export function EarningsClient() {
     let active = true;
     setTransactionsReady(false);
 
-    getRealEarningsTransactions(storeId).then((fetched) => {
-      if (active) {
-        setAllTransactions(fetched);
-        setTransactionsReady(true);
-      }
-    });
+    Promise.all([getRealEarningsTransactions(storeId), getRealWalletSummary(storeId)]).then(
+      ([fetchedTransactions, fetchedWallet]) => {
+        if (active) {
+          setAllTransactions(fetchedTransactions);
+          setWallet(fetchedWallet);
+          setTransactionsReady(true);
+        }
+      },
+    );
 
     return () => {
       active = false;
@@ -79,7 +87,7 @@ export function EarningsClient() {
   const transactions = getFilteredTransactions(allTransactions, filter);
   const totalEarnings = transactions
     .filter((transaction) => transaction.type === "sale")
-    .reduce((sum, transaction) => sum + transaction.amount, wallet?.lifetimeSales ?? 0);
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
   const commissions = Math.abs(
     transactions
       .filter((transaction) => transaction.type === "commission")
@@ -140,7 +148,7 @@ export function EarningsClient() {
         <Metric icon={WalletCards} label="Available balance" value={formatCurrency(wallet?.availableBalance ?? 0)} />
         <Metric icon={HandCoins} label="Pending balance" value={formatCurrency(wallet?.pendingBalance ?? 0)} />
         <Metric icon={CircleDollarSign} label="Total earnings" value={formatCurrency(totalEarnings)} />
-        <Metric icon={Percent} label="Platform commissions" value={formatCurrency(commissions || wallet?.lifetimeCommission || 0)} />
+        <Metric icon={Percent} label="Platform commissions" value={formatCurrency(commissions)} />
       </div>
 
       <Card>

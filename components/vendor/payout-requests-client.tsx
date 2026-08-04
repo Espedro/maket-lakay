@@ -20,9 +20,14 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useVendorScope } from "@/hooks/use-vendor-scope";
 import { payoutRequestSchema, type PayoutRequestInput } from "@/lib/schemas";
-import { getWalletForStore, type PayoutRequest } from "@/lib/vendor-commerce";
+import type { PayoutRequest } from "@/lib/vendor-commerce";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { createRealPayoutRequest, getRealPayoutRequests } from "@/services/vendor-commerce";
+import {
+  createRealPayoutRequest,
+  getRealPayoutRequests,
+  getRealWalletSummary,
+  type RealWalletSummary,
+} from "@/services/vendor-commerce";
 
 const defaultValues: PayoutRequestInput = {
   method: "MonCash",
@@ -35,8 +40,8 @@ export function PayoutRequestsClient() {
   const [storeId, setStoreId] = React.useState(defaultStoreId);
   const [pendingRequest, setPendingRequest] = React.useState<PayoutRequestInput | null>(null);
   const [payoutRequests, setPayoutRequests] = React.useState<PayoutRequest[]>([]);
+  const [wallet, setWallet] = React.useState<RealWalletSummary | null>(null);
   const [payoutRequestsReady, setPayoutRequestsReady] = React.useState(false);
-  const wallet = getWalletForStore(storeId);
   const form = useForm<PayoutRequestInput>({
     resolver: zodResolver(payoutRequestSchema),
     defaultValues,
@@ -45,11 +50,17 @@ export function PayoutRequestsClient() {
   const refreshPayoutRequests = React.useCallback(async () => {
     if (!storeId) {
       setPayoutRequests([]);
+      setWallet(null);
       setPayoutRequestsReady(true);
       return;
     }
 
-    setPayoutRequests(await getRealPayoutRequests(storeId));
+    const [fetchedRequests, fetchedWallet] = await Promise.all([
+      getRealPayoutRequests(storeId),
+      getRealWalletSummary(storeId),
+    ]);
+    setPayoutRequests(fetchedRequests);
+    setWallet(fetchedWallet);
     setPayoutRequestsReady(true);
   }, [storeId]);
 
@@ -230,7 +241,9 @@ export function PayoutRequestsClient() {
           <DialogHeader>
             <DialogTitle>Confirm payout request</DialogTitle>
             <DialogDescription>
-              This is a frontend-only simulation. No money will move and no provider is connected.
+              The request itself is real and reduces your available balance immediately. No
+              payment provider is connected yet, so actual money does not move until an admin
+              processes it.
             </DialogDescription>
           </DialogHeader>
           {pendingRequest ? (
