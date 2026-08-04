@@ -2,9 +2,12 @@ import Link from "next/link";
 
 import { Breadcrumbs } from "@/components/marketplace/breadcrumbs";
 import { Button } from "@/components/ui/button";
-import { categories, products } from "@/data/mock-data";
+import { categories } from "@/data/mock-data";
+import { getProducts } from "@/services/products";
 
-export default function CategoriesPage() {
+export default async function CategoriesPage() {
+  const products = await getProducts();
+
   return (
     <div className="container space-y-6 py-6">
       <Breadcrumbs items={[{ label: "Categories" }]} />

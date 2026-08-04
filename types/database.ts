@@ -27,7 +27,7 @@ export type Database = {
           accent_color?: string | null
           description?: string | null
           icon?: string | null
-          id?: string
+          id: string
           name: string
           slug: string
         }
@@ -70,7 +70,7 @@ export type Database = {
           compare_at_price?: number | null
           currency?: string
           description?: string | null
-          id?: string
+          id: string
           image?: string | null
           is_featured?: boolean
           is_local_made?: boolean
@@ -185,7 +185,7 @@ export type Database = {
           city?: string | null
           country?: string | null
           description?: string | null
-          id?: string
+          id: string
           logo?: string | null
           name: string
           product_count?: number
@@ -229,7 +229,7 @@ export type Database = {
           joined_at: string
           name: string
           owner_name: string
-          owner_profile_id: string
+          owner_profile_id: string | null
           phone: string | null
           rating: number
           verification_status: Database["public"]["Enums"]["verification_status"]
@@ -238,11 +238,11 @@ export type Database = {
           city?: string | null
           country?: string | null
           email: string
-          id?: string
+          id: string
           joined_at?: string
           name: string
           owner_name: string
-          owner_profile_id: string
+          owner_profile_id?: string | null
           phone?: string | null
           rating?: number
           verification_status?: Database["public"]["Enums"]["verification_status"]
@@ -255,7 +255,7 @@ export type Database = {
           joined_at?: string
           name?: string
           owner_name?: string
-          owner_profile_id?: string
+          owner_profile_id?: string | null
           phone?: string | null
           rating?: number
           verification_status?: Database["public"]["Enums"]["verification_status"]

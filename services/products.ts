@@ -1,61 +1,111 @@
-import { categories, products, reviews, stores, vendors } from "@/data/mock-data";
+import { reviews } from "@/data/mock-data";
+import { mapProductRow } from "@/lib/supabase/mappers";
+import { createPublicClient } from "@/lib/supabase/public";
 import {
   discoverProducts,
   getBrands,
-  getProductCategory,
-  getProductStore,
-  getProductVendor,
   type ProductDiscoveryFilters,
 } from "@/lib/product-discovery";
 
-export function getProducts(filters: ProductDiscoveryFilters = {}) {
+async function fetchAllProducts() {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase.from("products").select("*");
+
+  if (error) {
+    throw new Error(`Failed to load products: ${error.message}`);
+  }
+
+  return (data ?? []).map(mapProductRow);
+}
+
+export async function getProducts(filters: ProductDiscoveryFilters = {}) {
+  const products = await fetchAllProducts();
   return discoverProducts(products, filters);
 }
 
-export function getProductById(productId: string) {
-  return products.find((product) => product.id === productId);
+export async function getProductById(productId: string) {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("id", productId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load product ${productId}: ${error.message}`);
+  }
+
+  return data ? mapProductRow(data) : undefined;
 }
 
-export function getProductBySlug(slug: string) {
-  return products.find((product) => product.slug === slug);
+export async function getProductBySlug(slug: string) {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load product "${slug}": ${error.message}`);
+  }
+
+  return data ? mapProductRow(data) : undefined;
 }
 
-export function getFeaturedProducts() {
+export async function getFeaturedProducts() {
+  const products = await fetchAllProducts();
   return products.filter((product) => product.isFeatured);
 }
 
-export function getTrendingProducts() {
+export async function getTrendingProducts() {
+  const products = await fetchAllProducts();
   return products.filter((product) => product.isTrending);
 }
 
-export function getNewArrivals() {
+export async function getNewArrivals() {
+  const products = await fetchAllProducts();
   return products.filter((product) => product.isNewArrival);
 }
 
-export function getRecommendedProducts() {
+export async function getRecommendedProducts() {
+  const products = await fetchAllProducts();
   return products.filter((product) => product.isRecommended);
 }
 
-export function getProductsByCategory(categoryId: string) {
-  return products.filter((product) => product.categoryId === categoryId);
+export async function getProductsByCategory(categoryId: string) {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("category_id", categoryId);
+
+  if (error) {
+    throw new Error(`Failed to load products for category ${categoryId}: ${error.message}`);
+  }
+
+  return (data ?? []).map(mapProductRow);
 }
 
-export function getProductsByStore(storeId: string) {
-  return products.filter((product) => product.storeId === storeId);
+export async function getProductsByStore(storeId: string) {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("store_id", storeId);
+
+  if (error) {
+    throw new Error(`Failed to load products for store ${storeId}: ${error.message}`);
+  }
+
+  return (data ?? []).map(mapProductRow);
 }
 
 export function getProductReviews(productId: string) {
   return reviews.filter((review) => review.productId === productId);
 }
 
-export function getProductCatalogContext() {
-  return {
-    brands: getBrands(products),
-    categories,
-    getProductCategory,
-    getProductStore,
-    getProductVendor,
-    stores,
-    vendors,
-  };
+export async function getBrandList() {
+  const products = await fetchAllProducts();
+  return getBrands(products);
 }

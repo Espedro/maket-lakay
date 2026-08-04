@@ -7,14 +7,17 @@ import { ProductSection } from "@/components/homepage/product-section";
 import { PromotionalBanners } from "@/components/homepage/promotional-banners";
 import { RetailDealGrid } from "@/components/homepage/retail-deal-grid";
 import { RetailShowcase } from "@/components/homepage/retail-showcase";
-import { products } from "@/data/mock-data";
+import { getNewArrivals, getRecommendedProducts, getTrendingProducts } from "@/services/products";
 
-export default function MarketplaceHome() {
-  const trendingProducts = products.filter((product) => product.isTrending).slice(0, 4);
-  const newArrivals = products.filter((product) => product.isNewArrival).slice(0, 4);
-  const recommendedProducts = products
-    .filter((product) => product.isRecommended)
-    .slice(0, 4);
+export default async function MarketplaceHome() {
+  const [trending, newest, recommended] = await Promise.all([
+    getTrendingProducts(),
+    getNewArrivals(),
+    getRecommendedProducts(),
+  ]);
+  const trendingProducts = trending.slice(0, 4);
+  const newArrivals = newest.slice(0, 4);
+  const recommendedProducts = recommended.slice(0, 4);
 
   return (
     <div className="bg-white">

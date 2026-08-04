@@ -1,8 +1,10 @@
 import { Breadcrumbs } from "@/components/marketplace/breadcrumbs";
 import { ProductDiscoveryView } from "@/components/discovery/product-discovery-view";
-import { products } from "@/data/mock-data";
+import { getProducts } from "@/services/products";
 
-export default function ProductsPage() {
+export default async function ProductsPage() {
+  const products = await getProducts();
+
   return (
     <div className="container space-y-6 py-6">
       <Breadcrumbs items={[{ label: "Products" }]} />

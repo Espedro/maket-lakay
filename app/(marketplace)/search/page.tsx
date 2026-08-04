@@ -4,8 +4,9 @@ import { ProductDiscoveryView } from "@/components/discovery/product-discovery-v
 import { Breadcrumbs } from "@/components/marketplace/breadcrumbs";
 import { StoreCard } from "@/components/marketplace/store-card";
 import { Button } from "@/components/ui/button";
-import { categories as allCategories, products } from "@/data/mock-data";
+import { categories as allCategories } from "@/data/mock-data";
 import { searchCategories, searchStores } from "@/lib/product-discovery";
+import { getProducts } from "@/services/products";
 
 interface SearchPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -24,6 +25,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   );
   const stores = searchStores(query).slice(0, 3);
   const categories = searchCategories(query).slice(0, 6);
+  const products = await getProducts();
   const suggestions = query
     ? [`${query} deals`, `${query} near Haiti`, `${query} from verified stores`]
     : ["Haitian coffee", "solar lantern", "school supplies"];

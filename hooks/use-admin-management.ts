@@ -42,29 +42,30 @@ async function createRealVendorAccount(application: VendorApplication) {
 
   const supabase = createClient();
   const baseSlug = slugify(application.storeSlug || application.businessName || application.id);
-  const uniqueSlug = `${baseSlug || "store"}-${Math.random().toString(36).slice(2, 6)}`;
+  const uniqueSuffix = Math.random().toString(36).slice(2, 8);
+  const uniqueSlug = `${baseSlug || "store"}-${uniqueSuffix}`;
+  const vendorId = `vendor-local-${baseSlug || uniqueSuffix}-${uniqueSuffix}`;
+  const storeId = `store-local-${baseSlug || uniqueSuffix}-${uniqueSuffix}`;
 
-  const { data: vendorRow, error: vendorError } = await supabase
-    .from("vendors")
-    .insert({
-      owner_profile_id: application.applicantProfileId,
-      name: application.businessName,
-      owner_name: application.ownerName,
-      email: application.email,
-      phone: application.phone,
-      city: application.commune || application.city,
-      country: "Haiti",
-      verification_status: "verified",
-    })
-    .select("id")
-    .single();
+  const { error: vendorError } = await supabase.from("vendors").insert({
+    id: vendorId,
+    owner_profile_id: application.applicantProfileId,
+    name: application.businessName,
+    owner_name: application.ownerName,
+    email: application.email,
+    phone: application.phone,
+    city: application.commune || application.city,
+    country: "Haiti",
+    verification_status: "verified",
+  });
 
-  if (vendorError || !vendorRow) {
-    return { ok: false as const, reason: vendorError?.message ?? "Could not create vendor record." };
+  if (vendorError) {
+    return { ok: false as const, reason: vendorError.message };
   }
 
   const { error: storeError } = await supabase.from("stores").insert({
-    vendor_id: vendorRow.id,
+    id: storeId,
+    vendor_id: vendorId,
     name: application.businessName,
     slug: uniqueSlug,
     description: application.description,

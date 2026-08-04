@@ -5,7 +5,8 @@ import { ProductDiscoveryView } from "@/components/discovery/product-discovery-v
 import { Breadcrumbs } from "@/components/marketplace/breadcrumbs";
 import { ProductGrid } from "@/components/marketplace/product-grid";
 import { Button } from "@/components/ui/button";
-import { categories, products } from "@/data/mock-data";
+import { categories } from "@/data/mock-data";
+import { getProducts, getProductsByCategory } from "@/services/products";
 
 interface CategoryPageProps {
   params: Promise<{
@@ -29,9 +30,10 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     notFound();
   }
 
-  const categoryProducts = products.filter(
-    (product) => product.categoryId === category.id,
-  );
+  const [categoryProducts, products] = await Promise.all([
+    getProductsByCategory(category.id),
+    getProducts(),
+  ]);
   const featuredProducts = categoryProducts
     .filter((product) => product.isFeatured || product.isTrending)
     .slice(0, 4);

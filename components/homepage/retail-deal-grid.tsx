@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-import { products } from "@/data/mock-data";
+import { getProducts } from "@/services/products";
 import type { Product } from "@/types";
 
 const dealCards = [
@@ -24,10 +24,6 @@ const dealCards = [
   },
 ];
 
-function findProduct(productId: string) {
-  return products.find((product) => product.id === productId);
-}
-
 function DealProduct({ product }: { product: Product }) {
   return (
     <Link href={`/products/${product.slug}`} className="group block">
@@ -39,7 +35,13 @@ function DealProduct({ product }: { product: Product }) {
   );
 }
 
-export function RetailDealGrid() {
+export async function RetailDealGrid() {
+  const products = await getProducts();
+
+  function findProduct(productId: string) {
+    return products.find((product) => product.id === productId);
+  }
+
   return (
     <section className="bg-white pb-8">
       <div className="container grid gap-4 md:grid-cols-2 xl:grid-cols-4">

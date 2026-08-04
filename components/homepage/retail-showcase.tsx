@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Pause, Play } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { products } from "@/data/mock-data";
+import { getProducts } from "@/services/products";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { Product } from "@/types";
 
@@ -40,10 +40,6 @@ const heroTiles = [
   },
 ];
 
-function findProduct(productId: string) {
-  return products.find((product) => product.id === productId);
-}
-
 function ProductMini({ product }: { product: Product }) {
   return (
     <div className="rounded-md bg-white/75 p-2 shadow-sm">
@@ -55,7 +51,13 @@ function ProductMini({ product }: { product: Product }) {
   );
 }
 
-export function RetailShowcase() {
+export async function RetailShowcase() {
+  const products = await getProducts();
+
+  function findProduct(productId: string) {
+    return products.find((product) => product.id === productId);
+  }
+
   const spotlight = products.find((product) => product.id === "prod-artisan-basket");
 
   return (
