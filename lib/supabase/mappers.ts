@@ -1,5 +1,15 @@
 import type { Json, Tables, TablesInsert } from "@/types/database";
-import type { Category, CustomerAddress, Order, Product, Review, Store, StoreReview, Vendor } from "@/types";
+import type {
+  Category,
+  CustomerAddress,
+  DeliveryZone,
+  Order,
+  Product,
+  Review,
+  Store,
+  StoreReview,
+  Vendor,
+} from "@/types";
 import type { ManagedProduct } from "@/lib/vendor-products";
 import type { PayoutRequest, VendorPromotion } from "@/lib/vendor-commerce";
 
@@ -289,5 +299,33 @@ export function mapPayoutRequestRow(row: Tables<"payout_requests">): PayoutReque
     accountLabel: row.account_label,
     status: row.status as PayoutRequest["status"],
     requestedAt: row.requested_at,
+  };
+}
+
+export function mapDeliveryZoneRow(row: Tables<"delivery_zones">): DeliveryZone {
+  return {
+    id: row.id,
+    name: row.name,
+    city: row.city,
+    region: row.region,
+    country: row.country,
+    baseFee: Number(row.base_fee),
+    currency: row.currency === "HTG" ? "HTG" : "USD",
+    estimatedDays: row.estimated_days,
+    active: row.active,
+  };
+}
+
+export function toDeliveryZoneRow(zone: DeliveryZone): TablesInsert<"delivery_zones"> {
+  return {
+    id: zone.id,
+    name: zone.name,
+    city: zone.city,
+    region: zone.region,
+    country: zone.country,
+    base_fee: zone.baseFee,
+    currency: zone.currency,
+    estimated_days: zone.estimatedDays,
+    active: zone.active,
   };
 }

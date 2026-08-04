@@ -66,20 +66,27 @@ export function getNextOrderStatus(status: OrderStatus) {
   return ORDER_WORKFLOW[currentIndex + 1];
 }
 
-export function findDeliveryZone(address: CustomerAddress | undefined) {
-  if (!address) {
+export function findDeliveryZone(
+  address: CustomerAddress | undefined,
+  zones: DeliveryZone[] = deliveryZones,
+) {
+  if (zones.length === 0) {
     return deliveryZones[0];
   }
 
+  if (!address) {
+    return zones[0];
+  }
+
   return (
-    deliveryZones.find(
+    zones.find(
       (zone) =>
         zone.city === address.city &&
         zone.region === address.region &&
         zone.country === address.country,
     ) ??
-    deliveryZones.find((zone) => zone.country === address.country) ??
-    deliveryZones[0]
+    zones.find((zone) => zone.country === address.country) ??
+    zones[0]
   );
 }
 
@@ -128,8 +135,9 @@ export function mergeAssignments(localAssignments: DeliveryAssignment[] = []) {
 export function createOrdersFromSnapshot(
   snapshot: CheckoutOrderSnapshot,
   address: CustomerAddress | undefined,
+  zones: DeliveryZone[] = deliveryZones,
 ) {
-  const zone = findDeliveryZone(address);
+  const zone = findDeliveryZone(address, zones);
   const placedAt = snapshot.placedAt;
 
   return snapshot.vendorGroups.map((group, index): Order => {

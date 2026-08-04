@@ -106,6 +106,45 @@ export type Database = {
           },
         ]
       }
+      delivery_zones: {
+        Row: {
+          active: boolean
+          base_fee: number
+          city: string
+          country: string
+          created_at: string
+          currency: string
+          estimated_days: number
+          id: string
+          name: string
+          region: string
+        }
+        Insert: {
+          active?: boolean
+          base_fee?: number
+          city: string
+          country: string
+          created_at?: string
+          currency?: string
+          estimated_days?: number
+          id: string
+          name: string
+          region: string
+        }
+        Update: {
+          active?: boolean
+          base_fee?: number
+          city?: string
+          country?: string
+          created_at?: string
+          currency?: string
+          estimated_days?: number
+          id?: string
+          name?: string
+          region?: string
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           id: string

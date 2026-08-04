@@ -1,10 +1,12 @@
-import { customerAddresses, products, stores } from "@/data/mock-data";
+import { customerAddresses, deliveryZones, products, stores } from "@/data/mock-data";
 import type { CartItem } from "@/hooks/use-marketplace-storage";
+import { findDeliveryZone } from "@/lib/orders";
 import { normalizeProductPrice } from "@/lib/product-discovery";
 import { calculateVendorPayouts } from "@/lib/payments";
 import type {
   CheckoutOrderSnapshot,
   CustomerAddress,
+  DeliveryZone,
   PaymentRecord,
   Product,
   Store,
@@ -71,8 +73,11 @@ export function calculateDeliveryFee(
   store: Store,
   address: CustomerAddress | undefined,
   itemCount: number,
+  zones: DeliveryZone[] = deliveryZones,
 ) {
-  const baseFee = address?.country === "United States" ? 9 : 4;
+  const activeZones = zones.filter((zone) => zone.active);
+  const zone = activeZones.length > 0 ? findDeliveryZone(address, activeZones) : undefined;
+  const baseFee = zone?.baseFee ?? (address?.country === "United States" ? 9 : 4);
   const cityAdjustment =
     address?.city === store.city ? 1 : address?.country === "United States" ? 5 : 2;
 
@@ -82,6 +87,7 @@ export function calculateDeliveryFee(
 export function buildCartSummary(
   cart: CartItem[],
   address: CustomerAddress | undefined = customerAddresses[0],
+  zones: DeliveryZone[] = deliveryZones,
 ): CartSummary {
   const items = getCartProductItems(cart);
   const grouped = new Map<string, CartProductItem[]>();
@@ -107,7 +113,7 @@ export function buildCartSummary(
       store,
       items: groupItems,
       subtotal,
-      deliveryFee: calculateDeliveryFee(store, address, itemCount),
+      deliveryFee: calculateDeliveryFee(store, address, itemCount, zones),
       stockIssues,
     };
   });

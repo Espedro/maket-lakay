@@ -28,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { paymentMethods } from "@/data/mock-data";
+import { deliveryZones, paymentMethods } from "@/data/mock-data";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
@@ -43,9 +43,10 @@ import { createWebhookEvent, processPayment } from "@/lib/payments";
 import { checkoutAddressSchema, type CheckoutAddressInput } from "@/lib/schemas";
 import { getStripeClient, isStripeConfigured } from "@/lib/stripe/client";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { getRealDeliveryZones } from "@/services/delivery";
 import { createRealOrders } from "@/services/orders";
 import { getRealAddresses, saveRealAddress } from "@/services/users";
-import type { CustomerAddress, PaymentMethod, PaymentRecord } from "@/types";
+import type { CustomerAddress, DeliveryZone, PaymentMethod, PaymentRecord } from "@/types";
 
 type CheckoutStep = "address" | "delivery" | "payment" | "review";
 
@@ -279,12 +280,28 @@ export function CheckoutPageClient() {
     }
   }, [addressesReady, addresses.length]);
 
+  const [zones, setZones] = React.useState<DeliveryZone[]>(deliveryZones);
+
+  React.useEffect(() => {
+    let active = true;
+
+    getRealDeliveryZones().then((realZones) => {
+      if (active && realZones.length > 0) {
+        setZones(realZones);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const selectedAddress = addresses.find((address) => address.id === addressId) ?? addresses[0];
   const selectedDeliveryMethod =
     deliveryMethods.find((method) => method.id === deliveryMethodId) ?? deliveryMethods[0];
   const selectedPayment =
     paymentOptions.find((payment) => payment.id === paymentMethodId) ?? paymentOptions[0];
-  const summary = buildCartSummary(cart, selectedAddress);
+  const summary = buildCartSummary(cart, selectedAddress, zones);
   const deliveryFee = getDeliveryFee(summary, deliveryMethodId);
   const discount = 0;
   const total = Math.max(0, summary.subtotal + deliveryFee - discount);
@@ -512,8 +529,8 @@ export function CheckoutPageClient() {
         landmark: selectedAddress.landmark,
       },
     });
-    const createdOrders = createOrdersFromSnapshot(snapshot, selectedAddress);
-    const deliveryZone = findDeliveryZone(selectedAddress);
+    const createdOrders = createOrdersFromSnapshot(snapshot, selectedAddress, zones);
+    const deliveryZone = findDeliveryZone(selectedAddress, zones);
 
     saveOrderSnapshot(snapshot);
     savePaymentRecord(payment);

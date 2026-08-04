@@ -69,7 +69,7 @@ function getDefaultCommissionSettings(): CommissionSettings {
   };
 }
 
-function zoneToManagedZone(zone: DeliveryZone): ManagedDeliveryZone {
+export function zoneToManagedZone(zone: DeliveryZone): ManagedDeliveryZone {
   return {
     ...zone,
     department: zone.region,

@@ -246,7 +246,9 @@ export function DeliveryZoneManagementClient() {
         <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>{formValues.id ? "Edit delivery zone" : "Add delivery zone"}</DialogTitle>
-            <DialogDescription>Delivery zones are saved locally for this frontend preview.</DialogDescription>
+            <DialogDescription>
+              This zone is used to calculate real delivery fees at checkout.
+            </DialogDescription>
           </DialogHeader>
           <form className="grid gap-4" onSubmit={submitZone}>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -330,7 +332,9 @@ export function DeliveryZoneManagementClient() {
         <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>{pendingAction?.active ? "Enable delivery zone" : "Disable delivery zone"}</DialogTitle>
-            <DialogDescription>This only changes local delivery-zone coverage.</DialogDescription>
+            <DialogDescription>
+              This changes real delivery-zone coverage used by checkout.
+            </DialogDescription>
           </DialogHeader>
           <div className="border bg-muted/30 p-4 text-sm">
             {pendingAction?.active ? "Enable" : "Disable"} {pendingAction?.zone.zone}?

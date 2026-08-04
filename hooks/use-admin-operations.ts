@@ -9,9 +9,11 @@ import {
   ADMIN_OPERATIONS_KEY,
   hydrateAdminOperationsState,
   makeDeliveryZone,
+  zoneToManagedZone,
   type AdminOperationsState,
   type DeliveryZoneInput,
 } from "@/lib/admin-operations";
+import { getRealDeliveryZones, saveRealDeliveryZone, setRealDeliveryZoneActive } from "@/services/delivery";
 
 const STORAGE_EVENT = "maket-lakay-admin-operations-storage";
 
@@ -49,6 +51,22 @@ export function useAdminOperations() {
     writeState(nextState);
     setState(nextState);
   }, []);
+
+  React.useEffect(() => {
+    let active = true;
+
+    getRealDeliveryZones().then((realZones) => {
+      if (!active || realZones.length === 0) return;
+
+      const nextState = readState();
+      nextState.deliveryZones = realZones.map(zoneToManagedZone);
+      saveState(nextState);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [saveState]);
 
   const markOrderForReview = React.useCallback(
     (orderId: string) => {
@@ -185,7 +203,7 @@ export function useAdminOperations() {
   );
 
   const saveDeliveryZone = React.useCallback(
-    (input: DeliveryZoneInput) => {
+    async (input: DeliveryZoneInput) => {
       const nextState = readState();
       const zone = makeDeliveryZone(input);
       const exists = nextState.deliveryZones.some((item) => item.id === zone.id);
@@ -207,16 +225,27 @@ export function useAdminOperations() {
         newValue: `${zone.baseFee}/${zone.estimatedDays} days`,
         severity: "info",
       });
-      toast({
-        title: exists ? "Delivery zone updated" : "Delivery zone added",
-        description: `${zone.zone} was saved locally.`,
-      });
+
+      const realResult = await saveRealDeliveryZone(zone);
+
+      if (!realResult.ok) {
+        toast({
+          title: "Saved locally, real sync failed",
+          description: realResult.reason ?? `${zone.zone} could not be synced to the live zone list.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: exists ? "Delivery zone updated" : "Delivery zone added",
+          description: `${zone.zone} was saved.`,
+        });
+      }
     },
     [saveState],
   );
 
   const setDeliveryZoneActive = React.useCallback(
-    (zoneId: string, active: boolean) => {
+    async (zoneId: string, active: boolean) => {
       const nextState = readState();
       const oldZone = nextState.deliveryZones.find((zone) => zone.id === zoneId);
       nextState.deliveryZones = nextState.deliveryZones.map((zone) =>
@@ -236,9 +265,21 @@ export function useAdminOperations() {
         newValue: active ? "active" : "inactive",
         severity: active ? "info" : "warning",
       });
+
+      const realResult = await setRealDeliveryZoneActive(zoneId, active);
+
+      if (!realResult.ok) {
+        toast({
+          title: "Saved locally, real sync failed",
+          description: realResult.reason ?? "Zone status could not be synced to the live zone list.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: active ? "Delivery zone enabled" : "Delivery zone disabled",
-        description: "Zone status was updated locally.",
+        description: "Zone status was updated.",
       });
     },
     [saveState],

@@ -10,13 +10,15 @@ import { VendorCartGroup } from "@/components/checkout/vendor-cart-group";
 import { EmptyState } from "@/components/marketplace/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { products } from "@/data/mock-data";
+import { deliveryZones, products } from "@/data/mock-data";
 import { toast } from "@/hooks/use-toast";
 import type { CartItem } from "@/hooks/use-marketplace-storage";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import { buildCartSummary } from "@/lib/checkout";
 import { normalizeProductPrice } from "@/lib/product-discovery";
 import { formatCurrency } from "@/lib/utils";
+import { getRealDeliveryZones } from "@/services/delivery";
+import type { DeliveryZone } from "@/types";
 
 type PromoState =
   | { code: ""; discount: 0; message: ""; status: "idle" }
@@ -153,7 +155,23 @@ export function CartPageClient() {
     message: "",
     status: "idle",
   });
-  const summary = buildCartSummary(cart);
+  const [zones, setZones] = React.useState<DeliveryZone[]>(deliveryZones);
+
+  React.useEffect(() => {
+    let active = true;
+
+    getRealDeliveryZones().then((realZones) => {
+      if (active && realZones.length > 0) {
+        setZones(realZones);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const summary = buildCartSummary(cart, undefined, zones);
   const appliedDiscount = Math.min(promo.discount, summary.total);
 
   function applyPromoCode() {
