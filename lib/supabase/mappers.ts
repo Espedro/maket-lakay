@@ -1,6 +1,7 @@
 import type { Json, Tables, TablesInsert } from "@/types/database";
 import type { Category, CustomerAddress, Order, Product, Review, Store, StoreReview, Vendor } from "@/types";
 import type { ManagedProduct } from "@/lib/vendor-products";
+import type { PayoutRequest, VendorPromotion } from "@/lib/vendor-commerce";
 
 export function mapCategoryRow(row: Tables<"categories">): Category {
   return {
@@ -238,5 +239,55 @@ export function mapStoreReviewRow(row: Tables<"store_reviews">): StoreReview {
     body: row.body,
     createdAt: row.created_at,
     status: row.status as StoreReview["status"],
+  };
+}
+
+export function mapVendorPromotionRow(row: Tables<"vendor_promotions">): VendorPromotion {
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    name: row.name,
+    discountType: row.discount_type as VendorPromotion["discountType"],
+    discountValue: Number(row.discount_value),
+    productIds: row.product_ids,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    usageStatus: row.usage_status as VendorPromotion["usageStatus"],
+    views: row.views,
+    orders: row.orders,
+    revenue: Number(row.revenue),
+    createdAt: row.created_at,
+  };
+}
+
+export function toVendorPromotionRow(
+  promotion: VendorPromotion,
+  storeId: string,
+): TablesInsert<"vendor_promotions"> {
+  return {
+    store_id: storeId,
+    name: promotion.name,
+    discount_type: promotion.discountType,
+    discount_value: promotion.discountValue,
+    product_ids: promotion.productIds,
+    start_date: promotion.startDate,
+    end_date: promotion.endDate,
+    usage_status: promotion.usageStatus,
+    views: promotion.views,
+    orders: promotion.orders,
+    revenue: promotion.revenue,
+  };
+}
+
+export function mapPayoutRequestRow(row: Tables<"payout_requests">): PayoutRequest {
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    method: row.method as PayoutRequest["method"],
+    amount: Number(row.amount),
+    currency: row.currency === "HTG" ? "HTG" : "USD",
+    accountLabel: row.account_label,
+    status: row.status as PayoutRequest["status"],
+    requestedAt: row.requested_at,
   };
 }

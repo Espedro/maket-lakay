@@ -9,12 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useVendorCommerce } from "@/hooks/use-vendor-commerce";
+import { toast } from "@/hooks/use-toast";
 import { useVendorProducts } from "@/hooks/use-vendor-products";
 import { useVendorScope } from "@/hooks/use-vendor-scope";
 import { vendorPromotionSchema, type VendorPromotionInput } from "@/lib/schemas";
 import type { VendorPromotion } from "@/lib/vendor-commerce";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { getRealPromotions, saveRealPromotion } from "@/services/vendor-commerce";
 
 const defaultValues: VendorPromotionInput = {
   name: "",
@@ -27,32 +28,57 @@ const defaultValues: VendorPromotionInput = {
 };
 
 export function PromotionsClient() {
-  const { isReady, promotions, savePromotion } = useVendorCommerce();
   const { products } = useVendorProducts();
-  const { isReady: scopeReady, scopedStoreIds } = useVendorScope();
+  const { defaultStoreId, isReady: scopeReady, scopedStoreIds } = useVendorScope();
+  const [promotions, setPromotions] = React.useState<VendorPromotion[]>([]);
+  const [promotionsReady, setPromotionsReady] = React.useState(false);
   const scopedProducts = products.filter((product) => scopedStoreIds.has(product.storeId));
-  const scopedProductIds = new Set(scopedProducts.map((product) => product.id));
-  const scopedPromotions = promotions.filter((promotion) =>
-    promotion.productIds.some((productId) => scopedProductIds.has(productId)),
-  );
+
+  const refreshPromotions = React.useCallback(async () => {
+    if (!defaultStoreId) {
+      setPromotions([]);
+      setPromotionsReady(true);
+      return;
+    }
+
+    setPromotions(await getRealPromotions(defaultStoreId));
+    setPromotionsReady(true);
+  }, [defaultStoreId]);
+
+  React.useEffect(() => {
+    refreshPromotions();
+  }, [refreshPromotions]);
+
   const form = useForm<VendorPromotionInput>({
     resolver: zodResolver(vendorPromotionSchema),
     defaultValues,
   });
   const selectedProductIds = form.watch("productIds");
 
-  function submitPromotion(values: VendorPromotionInput) {
+  async function submitPromotion(values: VendorPromotionInput) {
     const promotion: VendorPromotion = {
-      id: `promo-local-${Date.now()}`,
+      id: "",
       ...values,
-      views: Math.floor(250 + values.productIds.length * 160),
-      orders: Math.floor(4 + values.discountValue),
-      revenue: Math.round((values.productIds.length * values.discountValue * 18 + 120) * 100) / 100,
+      views: 0,
+      orders: 0,
+      revenue: 0,
       createdAt: new Date().toISOString(),
     };
 
-    savePromotion(promotion);
+    const result = await saveRealPromotion(promotion, defaultStoreId);
+
+    if (!result.ok) {
+      toast({
+        title: "Could not create promotion",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({ title: "Promotion created", description: `${promotion.name} is live.` });
     form.reset(defaultValues);
+    await refreshPromotions();
   }
 
   function toggleProduct(productId: string) {
@@ -63,7 +89,7 @@ export function PromotionsClient() {
     form.setValue("productIds", nextProductIds, { shouldValidate: true, shouldDirty: true });
   }
 
-  if (!isReady || !scopeReady) {
+  if (!scopeReady || !promotionsReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 
@@ -86,7 +112,7 @@ export function PromotionsClient() {
             <h2 className="text-xl font-black">Promotion list</h2>
           </div>
           <div className="mt-5 space-y-3">
-            {scopedPromotions.map((promotion) => (
+            {promotions.map((promotion) => (
               <PromotionCard key={promotion.id} promotion={promotion} />
             ))}
           </div>

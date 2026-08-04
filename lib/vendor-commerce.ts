@@ -15,6 +15,7 @@ export type PayoutMethod = "MonCash" | "NatCash" | "ACH" | "Zelle" | "PayPal" | 
 
 export interface VendorPromotion {
   id: string;
+  storeId?: string;
   name: string;
   discountType: DiscountType;
   discountValue: number;

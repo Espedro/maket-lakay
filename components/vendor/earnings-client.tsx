@@ -15,14 +15,13 @@ import { CircleDollarSign, HandCoins, Percent, WalletCards } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useVendorScope } from "@/hooks/use-vendor-scope";
-import { buildEarningsTransactions, getWalletForStore } from "@/lib/vendor-commerce";
+import { getWalletForStore, type EarningsTransaction } from "@/lib/vendor-commerce";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { getRealEarningsTransactions } from "@/services/vendor-commerce";
 
 type DateFilter = "7d" | "30d" | "all";
 
-function getFilteredTransactions(storeId: string, filter: DateFilter) {
-  const transactions = buildEarningsTransactions(storeId);
-
+function getFilteredTransactions(transactions: EarningsTransaction[], filter: DateFilter) {
   if (filter === "all") return transactions;
 
   const now = new Date("2026-07-20T12:00:00Z").getTime();
@@ -32,8 +31,8 @@ function getFilteredTransactions(storeId: string, filter: DateFilter) {
   return transactions.filter((transaction) => new Date(transaction.createdAt).getTime() >= threshold);
 }
 
-function buildChartData(storeId: string, filter: DateFilter) {
-  const transactions = getFilteredTransactions(storeId, filter).filter(
+function buildChartData(allTransactions: EarningsTransaction[], filter: DateFilter) {
+  const transactions = getFilteredTransactions(allTransactions, filter).filter(
     (transaction) => transaction.type === "sale",
   );
 
@@ -51,8 +50,33 @@ export function EarningsClient() {
   const { defaultStoreId, isReady: scopeReady, scopedStores } = useVendorScope();
   const [storeId, setStoreId] = React.useState(defaultStoreId);
   const [filter, setFilter] = React.useState<DateFilter>("30d");
+  const [allTransactions, setAllTransactions] = React.useState<EarningsTransaction[]>([]);
+  const [transactionsReady, setTransactionsReady] = React.useState(false);
   const wallet = getWalletForStore(storeId);
-  const transactions = getFilteredTransactions(storeId, filter);
+
+  React.useEffect(() => {
+    if (!storeId) {
+      setAllTransactions([]);
+      setTransactionsReady(true);
+      return;
+    }
+
+    let active = true;
+    setTransactionsReady(false);
+
+    getRealEarningsTransactions(storeId).then((fetched) => {
+      if (active) {
+        setAllTransactions(fetched);
+        setTransactionsReady(true);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [storeId]);
+
+  const transactions = getFilteredTransactions(allTransactions, filter);
   const totalEarnings = transactions
     .filter((transaction) => transaction.type === "sale")
     .reduce((sum, transaction) => sum + transaction.amount, wallet?.lifetimeSales ?? 0);
@@ -61,7 +85,7 @@ export function EarningsClient() {
       .filter((transaction) => transaction.type === "commission")
       .reduce((sum, transaction) => sum + transaction.amount, 0),
   );
-  const chartData = buildChartData(storeId, filter);
+  const chartData = buildChartData(allTransactions, filter);
 
   React.useEffect(() => {
     if (!scopeReady) return;
@@ -70,6 +94,10 @@ export function EarningsClient() {
       setStoreId(defaultStoreId);
     }
   }, [defaultStoreId, scopeReady, scopedStores, storeId]);
+
+  if (!scopeReady || !transactionsReady) {
+    return <div className="h-96 animate-pulse border bg-muted" />;
+  }
 
   return (
     <div className="space-y-6">

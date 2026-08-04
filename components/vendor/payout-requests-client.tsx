@@ -18,11 +18,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { useVendorCommerce } from "@/hooks/use-vendor-commerce";
 import { useVendorScope } from "@/hooks/use-vendor-scope";
 import { payoutRequestSchema, type PayoutRequestInput } from "@/lib/schemas";
 import { getWalletForStore, type PayoutRequest } from "@/lib/vendor-commerce";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { createRealPayoutRequest, getRealPayoutRequests } from "@/services/vendor-commerce";
 
 const defaultValues: PayoutRequestInput = {
   method: "MonCash",
@@ -31,18 +31,31 @@ const defaultValues: PayoutRequestInput = {
 };
 
 export function PayoutRequestsClient() {
-  const { isReady, payoutRequests, savePayoutRequest } = useVendorCommerce();
   const { defaultStoreId, isReady: scopeReady, scopedStores } = useVendorScope();
   const [storeId, setStoreId] = React.useState(defaultStoreId);
   const [pendingRequest, setPendingRequest] = React.useState<PayoutRequestInput | null>(null);
+  const [payoutRequests, setPayoutRequests] = React.useState<PayoutRequest[]>([]);
+  const [payoutRequestsReady, setPayoutRequestsReady] = React.useState(false);
   const wallet = getWalletForStore(storeId);
-  const scopedPayoutRequests = payoutRequests.filter((request) =>
-    request.storeId ? request.storeId === storeId : storeId === "store-bel-lakay",
-  );
   const form = useForm<PayoutRequestInput>({
     resolver: zodResolver(payoutRequestSchema),
     defaultValues,
   });
+
+  const refreshPayoutRequests = React.useCallback(async () => {
+    if (!storeId) {
+      setPayoutRequests([]);
+      setPayoutRequestsReady(true);
+      return;
+    }
+
+    setPayoutRequests(await getRealPayoutRequests(storeId));
+    setPayoutRequestsReady(true);
+  }, [storeId]);
+
+  React.useEffect(() => {
+    refreshPayoutRequests();
+  }, [refreshPayoutRequests]);
 
   React.useEffect(() => {
     if (!scopeReady) return;
@@ -65,11 +78,11 @@ export function PayoutRequestsClient() {
     setPendingRequest(values);
   }
 
-  function submitPayoutRequest() {
+  async function submitPayoutRequest() {
     if (!pendingRequest) return;
 
     const payoutRequest: PayoutRequest = {
-      id: `payout-local-${Date.now()}`,
+      id: "",
       storeId,
       method: pendingRequest.method,
       amount: pendingRequest.amount,
@@ -79,12 +92,24 @@ export function PayoutRequestsClient() {
       requestedAt: new Date().toISOString(),
     };
 
-    savePayoutRequest(payoutRequest);
+    const result = await createRealPayoutRequest(payoutRequest, storeId);
+
+    if (!result.ok) {
+      toast({
+        title: "Could not submit payout request",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({ title: "Payout requested", description: "Your payout request was submitted." });
     form.reset(defaultValues);
     setPendingRequest(null);
+    await refreshPayoutRequests();
   }
 
-  if (!isReady || !scopeReady) {
+  if (!scopeReady || !payoutRequestsReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 
@@ -179,7 +204,7 @@ export function PayoutRequestsClient() {
                 </tr>
               </thead>
               <tbody>
-                {scopedPayoutRequests.map((request) => (
+                {payoutRequests.map((request) => (
                   <tr key={request.id} className="border-b last:border-0">
                     <td className="py-3">{formatDate(request.requestedAt)}</td>
                     <td className="py-3 font-semibold">{request.method}</td>

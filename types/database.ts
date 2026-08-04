@@ -208,6 +208,47 @@ export type Database = {
           },
         ]
       }
+      payout_requests: {
+        Row: {
+          account_label: string
+          amount: number
+          currency: string
+          id: string
+          method: string
+          requested_at: string
+          status: string
+          store_id: string
+        }
+        Insert: {
+          account_label: string
+          amount: number
+          currency?: string
+          id?: string
+          method: string
+          requested_at?: string
+          status?: string
+          store_id: string
+        }
+        Update: {
+          account_label?: string
+          amount?: number
+          currency?: string
+          id?: string
+          method?: string
+          requested_at?: string
+          status?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payout_requests_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_reviews: {
         Row: {
           body: string
@@ -497,6 +538,62 @@ export type Database = {
             columns: ["vendor_id"]
             isOneToOne: false
             referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_promotions: {
+        Row: {
+          created_at: string
+          discount_type: string
+          discount_value: number
+          end_date: string
+          id: string
+          name: string
+          orders: number
+          product_ids: string[]
+          revenue: number
+          start_date: string
+          store_id: string
+          usage_status: string
+          views: number
+        }
+        Insert: {
+          created_at?: string
+          discount_type: string
+          discount_value: number
+          end_date: string
+          id?: string
+          name: string
+          orders?: number
+          product_ids?: string[]
+          revenue?: number
+          start_date: string
+          store_id: string
+          usage_status?: string
+          views?: number
+        }
+        Update: {
+          created_at?: string
+          discount_type?: string
+          discount_value?: number
+          end_date?: string
+          id?: string
+          name?: string
+          orders?: number
+          product_ids?: string[]
+          revenue?: number
+          start_date?: string
+          store_id?: string
+          usage_status?: string
+          views?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_promotions_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
             referencedColumns: ["id"]
           },
         ]
