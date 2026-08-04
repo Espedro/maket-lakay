@@ -3,6 +3,8 @@
 import * as React from "react";
 
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { addRealWishlistItem, getRealWishlistProductIds, removeRealWishlistItem } from "@/services/users";
 import { ORDER_SNAPSHOT_KEY } from "@/lib/checkout";
 import { readLocalJson, removeLocalValue, writeLocalJson } from "@/lib/local-storage";
 import {
@@ -80,6 +82,7 @@ function removeValue(key: string) {
 }
 
 export function useMarketplaceStorage() {
+  const { user } = useAuth();
   const [cart, setCart] = React.useState<CartItem[]>([]);
   const [savedForLater, setSavedForLater] = React.useState<CartItem[]>([]);
   const [wishlist, setWishlist] = React.useState<string[]>([]);
@@ -134,6 +137,20 @@ export function useMarketplaceStorage() {
       window.removeEventListener(STORAGE_EVENT, refresh);
     };
   }, [refresh]);
+
+  React.useEffect(() => {
+    if (!user) return;
+
+    let active = true;
+
+    getRealWishlistProductIds(user.id).then((ids) => {
+      if (active) setWishlist(ids);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   const addToCart = React.useCallback((
     product: Product,
@@ -437,19 +454,49 @@ export function useMarketplaceStorage() {
     removeValue(ORDER_SNAPSHOT_KEY);
   }, []);
 
-  const toggleWishlist = React.useCallback((product: Product) => {
-    const currentWishlist = readJson<string[]>(WISHLIST_KEY, []);
-    const exists = currentWishlist.includes(product.id);
-    const nextWishlist = exists
-      ? currentWishlist.filter((productId) => productId !== product.id)
-      : [...currentWishlist, product.id];
+  const toggleWishlist = React.useCallback(
+    async (product: Product) => {
+      if (user) {
+        const exists = wishlist.includes(product.id);
+        const result = exists
+          ? await removeRealWishlistItem(user.id, product.id)
+          : await addRealWishlistItem(user.id, product.id);
 
-    writeJson(WISHLIST_KEY, nextWishlist);
-    toast({
-      title: exists ? "Removed from wishlist" : "Saved to wishlist",
-      description: `${product.name} ${exists ? "was removed" : "was saved"}.`,
-    });
-  }, []);
+        if (!result.ok) {
+          toast({
+            title: "Could not update wishlist",
+            description: result.reason,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        setWishlist((current) =>
+          exists
+            ? current.filter((productId) => productId !== product.id)
+            : [...current, product.id],
+        );
+        toast({
+          title: exists ? "Removed from wishlist" : "Saved to wishlist",
+          description: `${product.name} ${exists ? "was removed" : "was saved"}.`,
+        });
+        return;
+      }
+
+      const currentWishlist = readJson<string[]>(WISHLIST_KEY, []);
+      const exists = currentWishlist.includes(product.id);
+      const nextWishlist = exists
+        ? currentWishlist.filter((productId) => productId !== product.id)
+        : [...currentWishlist, product.id];
+
+      writeJson(WISHLIST_KEY, nextWishlist);
+      toast({
+        title: exists ? "Removed from wishlist" : "Saved to wishlist",
+        description: `${product.name} ${exists ? "was removed" : "was saved"}.`,
+      });
+    },
+    [user, wishlist],
+  );
 
   const isInWishlist = React.useCallback(
     (productId: string) => wishlist.includes(productId),

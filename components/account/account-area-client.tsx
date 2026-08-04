@@ -25,14 +25,12 @@ import {
 } from "lucide-react";
 
 import {
-  ACCOUNT_ADDRESSES_KEY,
   ACCOUNT_NOTIFICATION_READ_KEY,
   ACCOUNT_PROFILE_KEY,
   ACCOUNT_SETTINGS_KEY,
   accountPromotionalNotifications,
   activeCustomer,
   defaultAccountProfile,
-  getAccountAddresses,
   getNotificationCategory,
   getPaymentLabel,
   getPaymentRecordForOrder,
@@ -59,6 +57,7 @@ import { useAuth, type AuthUser } from "@/hooks/use-auth";
 import { toast } from "@/hooks/use-toast";
 import { getOrderTrackingEvents, mergeOrders } from "@/lib/orders";
 import { getRealOrdersByCustomer } from "@/services/orders";
+import { deleteRealAddress, getRealAddresses, saveRealAddress } from "@/services/users";
 import {
   accountProfileSchema,
   checkoutAddressSchema,
@@ -192,13 +191,11 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
     ...defaultAccountProfile,
     preferredLanguage: defaultAccountProfile.preferredLanguage,
   });
-  const [localAddresses, setLocalAddresses] = React.useState<CustomerAddress[]>([]);
   const [readNotificationIds, setReadNotificationIds] = React.useState<string[]>([]);
   const [settings, setSettings] = React.useState<AccountSettings>(defaultSettings);
   const [accountReady, setAccountReady] = React.useState(false);
   const activeAccountId = currentUser?.id ?? "";
   const profileStorageKey = getScopedStorageKey(ACCOUNT_PROFILE_KEY, activeAccountId);
-  const addressesStorageKey = getScopedStorageKey(ACCOUNT_ADDRESSES_KEY, activeAccountId);
   const notificationReadStorageKey = getScopedStorageKey(
     ACCOUNT_NOTIFICATION_READ_KEY,
     activeAccountId,
@@ -211,23 +208,58 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
     const baseProfile = getAccountProfileFromUser(currentUser);
 
     setProfile(readJson<AccountProfile>(profileStorageKey, baseProfile));
-    setLocalAddresses(readJson<CustomerAddress[]>(addressesStorageKey, []));
     setReadNotificationIds(readJson<string[]>(notificationReadStorageKey, []));
     setSettings(readJson<AccountSettings>(settingsStorageKey, defaultSettings));
     setAccountReady(true);
-  }, [
-    addressesStorageKey,
-    authReady,
-    currentUser,
-    notificationReadStorageKey,
-    profileStorageKey,
-    settingsStorageKey,
-  ]);
+  }, [authReady, currentUser, notificationReadStorageKey, profileStorageKey, settingsStorageKey]);
 
-  const addresses = React.useMemo(
-    () => getAccountAddresses(localAddresses, activeAccountId),
-    [activeAccountId, localAddresses],
-  );
+  const [addresses, setAddresses] = React.useState<CustomerAddress[]>([]);
+
+  const refreshAddresses = React.useCallback(async () => {
+    if (!activeAccountId) {
+      setAddresses([]);
+      return;
+    }
+
+    setAddresses(await getRealAddresses(activeAccountId));
+  }, [activeAccountId]);
+
+  React.useEffect(() => {
+    refreshAddresses();
+  }, [refreshAddresses]);
+
+  async function saveAddress(address: CustomerAddress) {
+    const result = await saveRealAddress(address, activeAccountId);
+
+    if (!result.ok) {
+      toast({
+        title: "Could not save address",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({ title: "Address saved", description: "Your address was saved." });
+    await refreshAddresses();
+  }
+
+  async function removeAddress(addressId: string) {
+    const result = await deleteRealAddress(addressId);
+
+    if (!result.ok) {
+      toast({
+        title: "Could not remove address",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({ title: "Address removed", description: "The address was removed." });
+    await refreshAddresses();
+  }
+
   const [realOrders, setRealOrders] = React.useState<Order[]>([]);
 
   React.useEffect(() => {
@@ -291,11 +323,6 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
   function updateProfile(nextProfile: AccountProfile) {
     setProfile(nextProfile);
     writeJson(profileStorageKey, nextProfile);
-  }
-
-  function updateAddresses(nextAddresses: CustomerAddress[]) {
-    setLocalAddresses(nextAddresses);
-    writeJson(addressesStorageKey, nextAddresses);
   }
 
   function markNotificationRead(notificationId: string) {
@@ -439,8 +466,8 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
           <AddressesPanel
             addresses={addresses}
             customerId={activeAccountId}
-            localAddresses={localAddresses}
-            onChange={updateAddresses}
+            onSave={saveAddress}
+            onRemove={removeAddress}
           />
         ) : null}
         {view === "orders" ? (
@@ -715,13 +742,13 @@ function ProfilePanel({
 function AddressesPanel({
   addresses,
   customerId,
-  localAddresses,
-  onChange,
+  onSave,
+  onRemove,
 }: {
   addresses: CustomerAddress[];
   customerId: string;
-  localAddresses: CustomerAddress[];
-  onChange: (addresses: CustomerAddress[]) => void;
+  onSave: (address: CustomerAddress) => void | Promise<void>;
+  onRemove: (addressId: string) => void | Promise<void>;
 }) {
   const form = useForm<CheckoutAddressInput>({
     resolver: zodResolver(checkoutAddressSchema),
@@ -740,7 +767,7 @@ function AddressesPanel({
 
   function addAddress(values: CheckoutAddressInput) {
     const nextAddress: CustomerAddress = {
-      id: `addr-account-${Date.now()}`,
+      id: `addr-local-${Date.now()}`,
       customerId,
       label: "Saved address",
       recipientName: `${values.firstName} ${values.lastName}`,
@@ -755,14 +782,8 @@ function AddressesPanel({
       landmark: values.landmark || undefined,
     };
 
-    onChange([nextAddress, ...localAddresses]);
+    onSave(nextAddress);
     form.reset();
-    toast({ title: "Address saved", description: "The address was saved locally." });
-  }
-
-  function removeAddress(addressId: string) {
-    onChange(localAddresses.filter((address) => address.id !== addressId));
-    toast({ title: "Address removed", description: "The local saved address was removed." });
   }
 
   return (
@@ -779,12 +800,10 @@ function AddressesPanel({
             key={address.id}
             address={address}
             action={
-              address.id.startsWith("addr-account-") ? (
-                <Button variant="outline" size="sm" onClick={() => removeAddress(address.id)}>
-                  <Trash2 className="size-4" />
-                  Remove
-                </Button>
-              ) : null
+              <Button variant="outline" size="sm" onClick={() => onRemove(address.id)}>
+                <Trash2 className="size-4" />
+                Remove
+              </Button>
             }
           />
         ))}

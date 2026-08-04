@@ -1,5 +1,5 @@
 import type { Json, Tables, TablesInsert } from "@/types/database";
-import type { Category, Order, Product, Store, Vendor } from "@/types";
+import type { Category, CustomerAddress, Order, Product, Review, Store, StoreReview, Vendor } from "@/types";
 import type { ManagedProduct } from "@/lib/vendor-products";
 
 export function mapCategoryRow(row: Tables<"categories">): Category {
@@ -165,5 +165,78 @@ export function mapOrderRow(row: OrderRowWithItems): Order {
     deliveryCity: row.delivery_city ?? "",
     trackingNumber: row.tracking_number ?? undefined,
     estimatedDeliveryAt: row.estimated_delivery_at ?? undefined,
+  };
+}
+
+export function mapAddressRow(row: Tables<"customer_addresses">): CustomerAddress {
+  return {
+    id: row.id,
+    customerId: row.customer_profile_id,
+    label: row.label,
+    recipientName: row.recipient_name,
+    phone: row.phone,
+    line1: row.line1,
+    line2: row.line2 ?? undefined,
+    city: row.city,
+    region: row.region,
+    country: row.country,
+    commune: row.commune ?? undefined,
+    zone: row.zone ?? undefined,
+    landmark: row.landmark ?? undefined,
+    postalCode: row.postal_code ?? undefined,
+    isDefault: row.is_default,
+  };
+}
+
+export function toAddressRow(
+  address: CustomerAddress,
+  customerProfileId: string,
+): TablesInsert<"customer_addresses"> {
+  return {
+    id: address.id.startsWith("addr-local-") ? undefined : address.id,
+    customer_profile_id: customerProfileId,
+    label: address.label,
+    recipient_name: address.recipientName,
+    phone: address.phone,
+    line1: address.line1,
+    line2: address.line2 ?? null,
+    city: address.city,
+    region: address.region,
+    country: address.country,
+    commune: address.commune ?? null,
+    zone: address.zone ?? null,
+    landmark: address.landmark ?? null,
+    postal_code: address.postalCode ?? null,
+    is_default: address.isDefault ?? false,
+  };
+}
+
+export function mapProductReviewRow(row: Tables<"product_reviews">): Review {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    customerId: row.customer_profile_id,
+    orderId: row.order_id ?? undefined,
+    rating: row.rating,
+    title: row.title,
+    body: row.body,
+    createdAt: row.created_at,
+    status: row.status as Review["status"],
+    helpfulCount: row.helpful_count,
+    vendorReply: row.vendor_reply ?? undefined,
+  };
+}
+
+export function mapStoreReviewRow(row: Tables<"store_reviews">): StoreReview {
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    customerId: row.customer_profile_id,
+    orderId: row.order_id ?? undefined,
+    rating: row.rating,
+    title: row.title,
+    body: row.body,
+    createdAt: row.created_at,
+    status: row.status as StoreReview["status"],
   };
 }

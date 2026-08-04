@@ -41,6 +41,71 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_addresses: {
+        Row: {
+          city: string
+          commune: string | null
+          country: string
+          created_at: string
+          customer_profile_id: string
+          id: string
+          is_default: boolean
+          label: string
+          landmark: string | null
+          line1: string
+          line2: string | null
+          phone: string
+          postal_code: string | null
+          recipient_name: string
+          region: string
+          zone: string | null
+        }
+        Insert: {
+          city: string
+          commune?: string | null
+          country?: string
+          created_at?: string
+          customer_profile_id: string
+          id?: string
+          is_default?: boolean
+          label?: string
+          landmark?: string | null
+          line1: string
+          line2?: string | null
+          phone: string
+          postal_code?: string | null
+          recipient_name: string
+          region: string
+          zone?: string | null
+        }
+        Update: {
+          city?: string
+          commune?: string | null
+          country?: string
+          created_at?: string
+          customer_profile_id?: string
+          id?: string
+          is_default?: boolean
+          label?: string
+          landmark?: string | null
+          line1?: string
+          line2?: string | null
+          phone?: string
+          postal_code?: string | null
+          recipient_name?: string
+          region?: string
+          zone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_addresses_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           id: string
@@ -139,6 +204,63 @@ export type Database = {
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_reviews: {
+        Row: {
+          body: string
+          created_at: string
+          customer_profile_id: string
+          helpful_count: number
+          id: string
+          order_id: string | null
+          product_id: string
+          rating: number
+          status: string
+          title: string
+          vendor_reply: string | null
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          customer_profile_id: string
+          helpful_count?: number
+          id?: string
+          order_id?: string | null
+          product_id: string
+          rating: number
+          status?: string
+          title: string
+          vendor_reply?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          customer_profile_id?: string
+          helpful_count?: number
+          id?: string
+          order_id?: string | null
+          product_id?: string
+          rating?: number
+          status?: string
+          title?: string
+          vendor_reply?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_reviews_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_reviews_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -272,6 +394,57 @@ export type Database = {
         }
         Relationships: []
       }
+      store_reviews: {
+        Row: {
+          body: string
+          created_at: string
+          customer_profile_id: string
+          id: string
+          order_id: string | null
+          rating: number
+          status: string
+          store_id: string
+          title: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          customer_profile_id: string
+          id?: string
+          order_id?: string | null
+          rating: number
+          status?: string
+          store_id: string
+          title: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          customer_profile_id?: string
+          id?: string
+          order_id?: string | null
+          rating?: number
+          status?: string
+          store_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_reviews_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "store_reviews_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stores: {
         Row: {
           banner_color: string | null
@@ -374,6 +547,42 @@ export type Database = {
             columns: ["owner_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wishlist_items: {
+        Row: {
+          created_at: string
+          customer_profile_id: string
+          id: string
+          product_id: string
+        }
+        Insert: {
+          created_at?: string
+          customer_profile_id: string
+          id?: string
+          product_id: string
+        }
+        Update: {
+          created_at?: string
+          customer_profile_id?: string
+          id?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wishlist_items_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wishlist_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
