@@ -17,7 +17,9 @@ import {
   type VendorApplication,
 } from "@/lib/admin-management";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Vendor } from "@/types";
+import { getAllRealOrders } from "@/services/orders";
+import { getStoresByVendor, getVendorById } from "@/services/vendors";
+import type { Store, Vendor } from "@/types";
 
 interface AdminVendorDetailsClientProps {
   vendorId: string;
@@ -216,10 +218,41 @@ const starterVendorApplications: Record<string, VendorApplication> = {
 export function AdminVendorDetailsClient({ vendorId }: AdminVendorDetailsClientProps) {
   const { isReady, reviewVendorDocuments, state, updateVendor } = useAdminManagement();
   const [pendingAction, setPendingAction] = React.useState<VendorAction | null>(null);
+  const [realVendor, setRealVendor] = React.useState<Vendor | undefined>(undefined);
+  const [realStores, setRealStores] = React.useState<Store[]>([]);
+  const [realSales, setRealSales] = React.useState(0);
+  const [realDataReady, setRealDataReady] = React.useState(false);
+
+  React.useEffect(() => {
+    let active = true;
+    setRealDataReady(false);
+
+    Promise.all([getVendorById(vendorId), getStoresByVendor(vendorId), getAllRealOrders()]).then(
+      ([fetchedVendor, fetchedStores, realOrders]) => {
+        if (!active) return;
+
+        const storeIds = new Set(fetchedStores.map((store) => store.id));
+        setRealVendor(fetchedVendor);
+        setRealStores(fetchedStores);
+        setRealSales(
+          realOrders
+            .filter((order) => storeIds.has(order.storeId))
+            .reduce((sum, order) => sum + order.total, 0),
+        );
+        setRealDataReady(true);
+      },
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [vendorId]);
+
   const application = state.vendorApplications.find(
     (item) => item.id === vendorId || getApprovedVendorId(item) === vendorId,
   ) ?? starterVendorApplications[vendorId];
   const vendor =
+    realVendor ??
     getAllVendors(state).find((item) => item.id === vendorId) ??
     (application
       ? ({
@@ -236,7 +269,7 @@ export function AdminVendorDetailsClient({ vendorId }: AdminVendorDetailsClientP
         } satisfies Vendor)
       : undefined);
 
-  if (!isReady) {
+  if (!isReady || !realDataReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 
@@ -256,8 +289,11 @@ export function AdminVendorDetailsClient({ vendorId }: AdminVendorDetailsClientP
 
   const selectedVendor = vendor;
   const adminState = state.vendors[selectedVendor.id];
-  const vendorStores = getAllStores(state).filter((store) => store.vendorId === selectedVendor.id);
-  const sales = vendorStores.reduce((sum, store) => sum + (storeTotals[store.id] ?? 0), 0);
+  const vendorStores = realVendor
+    ? realStores
+    : getAllStores(state).filter((store) => store.vendorId === selectedVendor.id);
+  const sales =
+    vendorStores.reduce((sum, store) => sum + (storeTotals[store.id] ?? 0), 0) + realSales;
 
   function confirmAction() {
     if (!pendingAction) return;

@@ -38,6 +38,9 @@ import {
   getVendorStores,
 } from "@/lib/admin-management";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { getAllRealOrders } from "@/services/orders";
+import { getStores as getRealStores } from "@/services/vendors";
+import type { Store } from "@/types";
 
 type VendorAction = {
   label: string;
@@ -194,6 +197,37 @@ export function AdminVendorsClient() {
   const [dateAddedFilter, setDateAddedFilter] = React.useState<DateAddedFilter>("all");
   const [pendingAction, setPendingAction] = React.useState<VendorAction | null>(null);
   const [selectedApplication, setSelectedApplication] = React.useState<VendorRow | null>(null);
+  const [realStores, setRealStores] = React.useState<Store[]>([]);
+  const [realStoreTotals, setRealStoreTotals] = React.useState<Record<string, number>>({});
+
+  React.useEffect(() => {
+    let active = true;
+
+    Promise.all([getRealStores(), getAllRealOrders()]).then(([fetchedStores, realOrders]) => {
+      if (!active) return;
+
+      setRealStores(fetchedStores);
+      setRealStoreTotals(
+        realOrders.reduce<Record<string, number>>((totals, order) => {
+          totals[order.storeId] = (totals[order.storeId] ?? 0) + order.total;
+          return totals;
+        }, {}),
+      );
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const combinedStoreTotals = React.useMemo(() => {
+    const combined: Record<string, number> = { ...storeTotals };
+    for (const [storeId, total] of Object.entries(realStoreTotals)) {
+      combined[storeId] = (combined[storeId] ?? 0) + total;
+    }
+    return combined;
+  }, [realStoreTotals]);
+
   const hasActiveFilters =
     query.trim() !== "" ||
     statusFilter !== "all" ||
@@ -212,12 +246,21 @@ export function AdminVendorsClient() {
         categoryNames: categoryIds.map(getCategoryName),
         documentReview: adminState?.documentReview ?? "not_started",
         storeStatus: adminState?.storeStatus ?? "paused",
-        totalSales: getVendorSales(vendor.id, storeTotals),
+        totalSales: getVendorSales(vendor.id, combinedStoreTotals),
         verificationStatus: adminState?.verificationStatus ?? "pending",
       };
     });
     const applicationRows: VendorRow[] = state.vendorApplications.map((application) => {
       const categoryId = getApplicationCategoryId(application.businessCategory);
+      const realVendorId = application.status === "approved" ? getApprovedVendorId(application) : undefined;
+      const realVendorStoreIds = realVendorId
+        ? realStores.filter((store) => store.vendorId === realVendorId).map((store) => store.id)
+        : [];
+      const realTotalSales = realVendorStoreIds.reduce(
+        (sum, storeId) => sum + (combinedStoreTotals[storeId] ?? 0),
+        0,
+      );
+      const approvedVendorAdminState = realVendorId ? state.vendors[realVendorId] : undefined;
 
       return {
         id: application.id,
@@ -235,14 +278,16 @@ export function AdminVendorsClient() {
           application.status === "rejected"
             ? "reviewed"
             : "not_started",
-        storeStatus: application.status === "approved" ? "open" : "paused",
-        totalSales: 0,
+        storeStatus:
+          approvedVendorAdminState?.storeStatus ?? (application.status === "approved" ? "open" : "paused"),
+        totalSales: realTotalSales,
         verificationStatus:
-          application.status === "approved"
+          approvedVendorAdminState?.verificationStatus ??
+          (application.status === "approved"
             ? "active"
             : application.status === "rejected"
               ? "rejected"
-              : "pending",
+              : "pending"),
         businessCategory: application.businessCategory,
         categoryIds: categoryId ? [categoryId] : [],
         categoryNames: [application.businessCategory].filter(Boolean),
@@ -308,7 +353,16 @@ export function AdminVendorsClient() {
       const matchesDate = matchesDateAdded(vendor.joinedAt, dateAddedFilter);
       return matchesQuery && matchesStatus && matchesCategory && matchesDate;
     });
-  }, [categoryFilter, dateAddedFilter, query, state.vendorApplications, state.vendors, statusFilter]);
+  }, [
+    categoryFilter,
+    combinedStoreTotals,
+    dateAddedFilter,
+    query,
+    realStores,
+    state.vendorApplications,
+    state.vendors,
+    statusFilter,
+  ]);
 
   function resetFilters() {
     setQuery("");
@@ -398,7 +452,7 @@ export function AdminVendorsClient() {
           <XCircle className="size-4" />
           Reject
         </Button>
-        {vendor.source === "vendor" ? (
+        {vendor.source === "vendor" || vendor.approvedVendorId ? (
           <Button
             type="button"
             variant="outline"
@@ -406,8 +460,8 @@ export function AdminVendorsClient() {
             onClick={() =>
               setPendingAction({
                 label: vendor.storeStatus === "suspended" ? "Reactivate vendor" : "Suspend vendor",
-                vendorId: vendor.id,
-                source: vendor.source,
+                vendorId: vendor.source === "vendor" ? vendor.id : (vendor.approvedVendorId ?? vendor.id),
+                source: "vendor",
                 verificationStatus: vendor.storeStatus === "suspended" ? "active" : "suspended",
                 storeStatus: vendor.storeStatus === "suspended" ? "open" : "suspended",
                 message: `${vendor.name} status was updated locally.`,

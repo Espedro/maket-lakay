@@ -88,6 +88,34 @@ async function createRealVendorAccount(application: VendorApplication) {
     return { ok: false as const, reason: profileError.message };
   }
 
+  return { ok: true as const, vendorId, storeId };
+}
+
+/**
+ * Best-effort sync of a local admin status decision to the real vendor/store
+ * rows. verification_status only has 3 real values (verified/pending/unverified)
+ * vs. the 4 local admin states (active/pending/rejected/suspended) - rejected
+ * and suspended both collapse to "unverified" real-side, which is an accepted
+ * lossy mapping rather than a schema change.
+ */
+async function updateRealVendorStatus(
+  vendorId: string,
+  verificationStatus: AdminVendorStatus,
+  storeStatus: AdminStoreStatus,
+) {
+  const supabase = createClient();
+  const realVerificationStatus =
+    verificationStatus === "active" ? "verified" : verificationStatus === "pending" ? "pending" : "unverified";
+
+  const [vendorResult, storeResult] = await Promise.all([
+    supabase.from("vendors").update({ verification_status: realVerificationStatus }).eq("id", vendorId),
+    supabase.from("stores").update({ verified: storeStatus === "open" }).eq("vendor_id", vendorId),
+  ]);
+
+  if (vendorResult.error || storeResult.error) {
+    return { ok: false as const, reason: vendorResult.error?.message ?? storeResult.error?.message };
+  }
+
   return { ok: true as const };
 }
 
@@ -117,7 +145,7 @@ export function useAdminManagement() {
   }, []);
 
   const updateVendor = React.useCallback(
-    (
+    async (
       vendorId: string,
       verificationStatus: AdminVendorStatus,
       storeStatus: AdminStoreStatus,
@@ -150,7 +178,19 @@ export function useAdminManagement() {
         newValue: `${verificationStatus}/${storeStatus}`,
         severity: verificationStatus === "suspended" || verificationStatus === "rejected" ? "warning" : "info",
       });
-      toast({ title: "Vendor updated", description: message });
+
+      const realResult = await updateRealVendorStatus(vendorId, verificationStatus, storeStatus);
+
+      if (!realResult.ok) {
+        toast({
+          title: "Vendor updated locally, real sync failed",
+          description:
+            realResult.reason ?? "The status was saved locally but could not be synced to the real vendor account.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Vendor updated", description: message });
+      }
     },
     [saveState],
   );
@@ -250,7 +290,7 @@ export function useAdminManagement() {
         (application) => application.id === applicationId,
       );
       const oldStatus = applicationToUpdate?.status;
-      let realAccountResult: { ok: boolean; reason?: string } | null = null;
+      let realAccountResult: { ok: boolean; reason?: string; vendorId?: string; storeId?: string } | null = null;
 
       if (status === "approved" && applicationToUpdate && oldStatus !== "approved") {
         realAccountResult = await createRealVendorAccount(applicationToUpdate);
@@ -263,11 +303,11 @@ export function useAdminManagement() {
               status,
               approvedVendorId:
                 status === "approved"
-                  ? application.approvedVendorId ?? getApprovedVendorId(application)
+                  ? application.approvedVendorId ?? realAccountResult?.vendorId ?? getApprovedVendorId(application)
                   : application.approvedVendorId,
               approvedStoreId:
                 status === "approved"
-                  ? application.approvedStoreId ?? getApprovedStoreId(application)
+                  ? application.approvedStoreId ?? realAccountResult?.storeId ?? getApprovedStoreId(application)
                   : application.approvedStoreId,
               reviewedAt:
                 status === "approved" || status === "rejected"
@@ -279,7 +319,10 @@ export function useAdminManagement() {
       );
 
       if (status === "approved" && applicationToUpdate) {
-        const vendorId = getApprovedVendorId(applicationToUpdate);
+        const vendorId =
+          applicationToUpdate.approvedVendorId ??
+          realAccountResult?.vendorId ??
+          getApprovedVendorId(applicationToUpdate);
         nextState.vendors[vendorId] = {
           verificationStatus: "active",
           storeStatus: "open",
