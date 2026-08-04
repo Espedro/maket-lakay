@@ -1,13 +1,9 @@
-"use client";
-
 import { SectionHeading } from "@/components/homepage/section-heading";
 import { StoreCard } from "@/components/marketplace/store-card";
-import { useAdminManagement } from "@/hooks/use-admin-management";
-import { getAllStores } from "@/lib/admin-management";
+import { getPopularStores } from "@/services/vendors";
 
-export function PopularStoresSection() {
-  const { state } = useAdminManagement();
-  const stores = getAllStores(state);
+export async function PopularStoresSection() {
+  const stores = await getPopularStores();
 
   return (
     <section id="popular-stores" className="container space-y-5 scroll-mt-28">

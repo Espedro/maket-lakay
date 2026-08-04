@@ -13,33 +13,22 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { categories, reviews } from "@/data/mock-data";
-import { useAdminManagement } from "@/hooks/use-admin-management";
-import { useVendorProducts } from "@/hooks/use-vendor-products";
-import { getAllStores, getAllVendors } from "@/lib/admin-management";
 import { cn } from "@/lib/utils";
+import type { Product, Store, Vendor } from "@/types";
 
-export function StoreDetailsClient({ slug }: { slug: string }) {
-  const { isReady: adminReady, state: adminState } = useAdminManagement();
-  const { isReady: productsReady, products } = useVendorProducts();
-  const stores = getAllStores(adminState);
-  const vendors = getAllVendors(adminState);
-  const store = stores.find((item) => item.slug === slug);
+interface StoreDetailsClientProps {
+  store: Store | undefined;
+  vendor: Vendor | undefined;
+  products: Product[];
+}
 
-  if (!adminReady || !productsReady) {
-    return (
-      <div className="container space-y-6 py-6">
-        <div className="h-8 w-56 animate-pulse bg-muted" />
-        <div className="h-72 animate-pulse border bg-muted" />
-      </div>
-    );
-  }
-
+export function StoreDetailsClient({ store, vendor, products }: StoreDetailsClientProps) {
   if (!store) {
     return (
       <div className="container space-y-5 py-6">
         <EmptyState
           title="Store not found"
-          description="This store is not available in the local marketplace data."
+          description="This store is not available in the marketplace."
           actionLabel="Back to stores"
         />
         <Button asChild>
@@ -49,8 +38,7 @@ export function StoreDetailsClient({ slug }: { slug: string }) {
     );
   }
 
-  const vendor = vendors.find((item) => item.id === store.vendorId);
-  const storeProducts = products.filter((product) => product.storeId === store.id);
+  const storeProducts = products;
   const featuredProducts = storeProducts
     .filter((product) => product.isFeatured || product.isRecommended)
     .slice(0, 4);
@@ -128,7 +116,7 @@ export function StoreDetailsClient({ slug }: { slug: string }) {
       <section className="space-y-4">
         <h2 className="text-xl font-black">All products from {store.name}</h2>
         <ProductDiscoveryView
-          products={products}
+          products={storeProducts}
           initialFilters={{ storeId: store.id }}
           lockedStoreId={store.id}
         />
