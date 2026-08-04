@@ -27,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { customerAddresses, paymentMethods } from "@/data/mock-data";
+import { paymentMethods } from "@/data/mock-data";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
@@ -42,14 +42,10 @@ import { createWebhookEvent, processPayment } from "@/lib/payments";
 import { checkoutAddressSchema, type CheckoutAddressInput } from "@/lib/schemas";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { createRealOrders } from "@/services/orders";
+import { getRealAddresses, saveRealAddress } from "@/services/users";
 import type { CustomerAddress, PaymentMethod } from "@/types";
 
 type CheckoutStep = "address" | "delivery" | "payment" | "review";
-type CheckoutAddress = CustomerAddress & {
-  commune?: string;
-  zone?: string;
-  landmark?: string;
-};
 
 const checkoutSteps: Array<{ id: CheckoutStep; label: string }> = [
   { id: "address", label: "Delivery Address" },
@@ -148,7 +144,7 @@ function getMockPaymentMethod(methodId: string): PaymentMethod {
   );
 }
 
-function getSelectedAddressDetails(address: CheckoutAddress) {
+function getSelectedAddressDetails(address: CustomerAddress) {
   return [
     address.line1,
     address.line2,
@@ -177,8 +173,9 @@ export function CheckoutPageClient() {
     savePaymentWebhook,
   } = useMarketplaceStorage();
   const [step, setStep] = React.useState<CheckoutStep>("address");
-  const [addressId, setAddressId] = React.useState(customerAddresses[0]?.id ?? "");
-  const [customAddress, setCustomAddress] = React.useState<CheckoutAddress | null>(null);
+  const [addresses, setAddresses] = React.useState<CustomerAddress[]>([]);
+  const [addressesReady, setAddressesReady] = React.useState(false);
+  const [addressId, setAddressId] = React.useState("");
   const [showAddressForm, setShowAddressForm] = React.useState(false);
   const [deliveryMethodId, setDeliveryMethodId] = React.useState("standard");
   const [paymentMethodId, setPaymentMethodId] = React.useState("moncash");
@@ -199,12 +196,35 @@ export function CheckoutPageClient() {
     },
   });
 
-  const addressOptions = React.useMemo(
-    () => (customAddress ? [...customerAddresses, customAddress] : customerAddresses),
-    [customAddress],
-  );
-  const selectedAddress =
-    addressOptions.find((address) => address.id === addressId) ?? addressOptions[0];
+  const refreshAddresses = React.useCallback(async () => {
+    if (!user) {
+      setAddresses([]);
+      setAddressesReady(true);
+      return;
+    }
+
+    setAddressesReady(false);
+    setAddresses(await getRealAddresses(user.id));
+    setAddressesReady(true);
+  }, [user]);
+
+  React.useEffect(() => {
+    refreshAddresses();
+  }, [refreshAddresses]);
+
+  React.useEffect(() => {
+    if (!addressId && addresses.length > 0) {
+      setAddressId(addresses.find((address) => address.isDefault)?.id ?? addresses[0].id);
+    }
+  }, [addresses, addressId]);
+
+  React.useEffect(() => {
+    if (addressesReady && addresses.length === 0) {
+      setShowAddressForm(true);
+    }
+  }, [addressesReady, addresses.length]);
+
+  const selectedAddress = addresses.find((address) => address.id === addressId) ?? addresses[0];
   const selectedDeliveryMethod =
     deliveryMethods.find((method) => method.id === deliveryMethodId) ?? deliveryMethods[0];
   const selectedPayment =
@@ -217,11 +237,13 @@ export function CheckoutPageClient() {
   const canPlaceOrder =
     isReady && cart.length > 0 && selectedAddress && summary.stockIssues.length === 0;
 
-  function createAddress(values: CheckoutAddressInput) {
-    const newAddress: CheckoutAddress = {
+  async function createAddress(values: CheckoutAddressInput) {
+    if (!user) return;
+
+    const newAddress: CustomerAddress = {
       id: `addr-local-${Date.now()}`,
-      customerId: user?.id ?? "customer-jean",
-      label: "New address",
+      customerId: user.id,
+      label: "Saved address",
       recipientName: `${values.firstName} ${values.lastName}`,
       phone: values.phone,
       line1: values.addressDetails,
@@ -234,15 +256,35 @@ export function CheckoutPageClient() {
       landmark: values.landmark || undefined,
     };
 
-    setCustomAddress(newAddress);
-    setAddressId(newAddress.id);
+    const result = await saveRealAddress(newAddress, user.id);
+
+    if (!result.ok) {
+      toast({
+        title: "Could not save address",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await refreshAddresses();
+    setAddressId(result.address.id);
     setShowAddressForm(false);
   }
 
   function goNext() {
     if (step === "address") {
-      if (showAddressForm && !customAddress) {
+      if (showAddressForm) {
         void addressForm.handleSubmit(createAddress)();
+        return;
+      }
+      if (!selectedAddress) {
+        toast({
+          title: "Add a delivery address",
+          description: "You need at least one saved address to continue.",
+          variant: "destructive",
+        });
+        setShowAddressForm(true);
         return;
       }
       setStep("delivery");
@@ -371,7 +413,7 @@ export function CheckoutPageClient() {
     router.push("/checkout/confirmation");
   }
 
-  if (!isReady || !authReady) {
+  if (!isReady || !authReady || !addressesReady) {
     return (
       <div className="grid gap-4">
         <div className="h-20 animate-pulse border bg-muted" />
@@ -464,8 +506,14 @@ export function CheckoutPageClient() {
               </Button>
             </div>
 
+            {addresses.length === 0 && !showAddressForm ? (
+              <p className="mt-4 text-sm text-muted-foreground">
+                You have no saved addresses yet. Add one to continue.
+              </p>
+            ) : null}
+
             <div className="mt-4 grid gap-3 md:grid-cols-3">
-              {addressOptions.map((address) => (
+              {addresses.map((address) => (
                 <label
                   key={address.id}
                   className="flex cursor-pointer gap-3 border p-3 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
@@ -636,7 +684,10 @@ export function CheckoutPageClient() {
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <ReviewTile title="Delivering to" text={`${selectedAddress.recipientName}, ${selectedAddress.city}`} />
+              <ReviewTile
+                title="Delivering to"
+                text={selectedAddress ? `${selectedAddress.recipientName}, ${selectedAddress.city}` : "No address selected"}
+              />
               <ReviewTile title="Delivery method" text={selectedDeliveryMethod.label} />
               <ReviewTile title="Payment method" text={selectedPayment.label} />
             </div>
@@ -705,7 +756,7 @@ export function CheckoutPageClient() {
         />
         <div className="grid gap-2 border bg-white p-3 text-sm">
           <p className="font-black">Selected checkout details</p>
-          <p className="text-muted-foreground">{selectedAddress.recipientName}</p>
+          <p className="text-muted-foreground">{selectedAddress?.recipientName ?? "No address selected"}</p>
           <p className="text-muted-foreground">{selectedDeliveryMethod.label}</p>
           <p className="text-muted-foreground">{selectedPayment.label}</p>
         </div>
