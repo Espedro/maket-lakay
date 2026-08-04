@@ -53,7 +53,7 @@ export function OrderConfirmationClient() {
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Order {order.id} was placed on {formatDate(order.placedAt)}. Your cart
-              has been cleared and the simulated order is saved locally.
+              has been cleared and the order has been saved to your account.
             </p>
           </div>
         </div>

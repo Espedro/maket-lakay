@@ -795,7 +795,7 @@ export function CheckoutPageClient() {
               <div className="h-full w-2/3 animate-pulse bg-primary" />
             </div>
             <p className="mt-2 text-xs font-semibold text-muted-foreground">
-              Creating a simulated order and clearing the local cart.
+              Creating your order and clearing your cart.
             </p>
           </div>
         ) : null}
