@@ -58,6 +58,7 @@ import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import { useAuth, type AuthUser } from "@/hooks/use-auth";
 import { toast } from "@/hooks/use-toast";
 import { getOrderTrackingEvents, mergeOrders } from "@/lib/orders";
+import { getRealOrdersByCustomer } from "@/services/orders";
 import {
   accountProfileSchema,
   checkoutAddressSchema,
@@ -227,13 +228,33 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
     () => getAccountAddresses(localAddresses, activeAccountId),
     [activeAccountId, localAddresses],
   );
-  const orders = React.useMemo(
-    () =>
-      mergeOrders(localOrders).filter(
-        (order) => order.customerId === activeAccountId || order.customerId === profile.id,
-      ),
-    [activeAccountId, localOrders, profile.id],
-  );
+  const [realOrders, setRealOrders] = React.useState<Order[]>([]);
+
+  React.useEffect(() => {
+    if (!activeAccountId) {
+      setRealOrders([]);
+      return;
+    }
+
+    let active = true;
+
+    getRealOrdersByCustomer(activeAccountId).then((fetched) => {
+      if (active) setRealOrders(fetched);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [activeAccountId]);
+
+  const orders = React.useMemo(() => {
+    const merged = new Map<string, Order>();
+    mergeOrders(localOrders)
+      .filter((order) => order.customerId === activeAccountId || order.customerId === profile.id)
+      .forEach((order) => merged.set(order.id, order));
+    realOrders.forEach((order) => merged.set(order.id, order));
+    return Array.from(merged.values());
+  }, [activeAccountId, localOrders, profile.id, realOrders]);
   const wishlistProducts = React.useMemo(
     () => wishlist.map(getProductById).filter((product): product is Product => Boolean(product)),
     [wishlist],

@@ -41,6 +41,108 @@ export type Database = {
         }
         Relationships: []
       }
+      order_items: {
+        Row: {
+          id: string
+          order_id: string
+          product_id: string | null
+          product_name: string
+          quantity: number
+          unit_price: number
+        }
+        Insert: {
+          id?: string
+          order_id: string
+          product_id?: string | null
+          product_name: string
+          quantity: number
+          unit_price: number
+        }
+        Update: {
+          id?: string
+          order_id?: string
+          product_id?: string | null
+          product_name?: string
+          quantity?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          currency: string
+          customer_profile_id: string
+          delivery_city: string | null
+          delivery_fee: number
+          estimated_delivery_at: string | null
+          id: string
+          placed_at: string
+          status: Database["public"]["Enums"]["order_status"]
+          store_id: string
+          subtotal: number
+          total: number
+          tracking_number: string | null
+        }
+        Insert: {
+          currency?: string
+          customer_profile_id: string
+          delivery_city?: string | null
+          delivery_fee?: number
+          estimated_delivery_at?: string | null
+          id: string
+          placed_at?: string
+          status?: Database["public"]["Enums"]["order_status"]
+          store_id: string
+          subtotal: number
+          total: number
+          tracking_number?: string | null
+        }
+        Update: {
+          currency?: string
+          customer_profile_id?: string
+          delivery_city?: string | null
+          delivery_fee?: number
+          estimated_delivery_at?: string | null
+          id?: string
+          placed_at?: string
+          status?: Database["public"]["Enums"]["order_status"]
+          store_id?: string
+          subtotal?: number
+          total?: number
+          tracking_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           brand: string | null
@@ -287,6 +389,15 @@ export type Database = {
       }
     }
     Enums: {
+      order_status:
+        | "pending"
+        | "confirmed"
+        | "processing"
+        | "ready_for_delivery"
+        | "out_for_delivery"
+        | "shipped"
+        | "delivered"
+        | "cancelled"
       product_status: "active" | "draft" | "out_of_stock"
       user_role: "customer" | "vendor" | "admin" | "support"
       verification_status: "verified" | "pending" | "unverified"
@@ -417,6 +528,16 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      order_status: [
+        "pending",
+        "confirmed",
+        "processing",
+        "ready_for_delivery",
+        "out_for_delivery",
+        "shipped",
+        "delivered",
+        "cancelled",
+      ],
       product_status: ["active", "draft", "out_of_stock"],
       user_role: ["customer", "vendor", "admin", "support"],
       verification_status: ["verified", "pending", "unverified"],

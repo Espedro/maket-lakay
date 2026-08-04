@@ -36,6 +36,7 @@ import {
   updateOrderStatus,
 } from "@/lib/orders";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { getRealOrdersByStore } from "@/services/orders";
 import type { Order, OrderStatus, PaymentRecord, Store } from "@/types";
 
 type OrderFilter = OrderStatus | "all";
@@ -96,7 +97,33 @@ export function VendorOrdersClient() {
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState<OrderFilter>("all");
   const [storeFilter, setStoreFilter] = React.useState("all");
-  const orders = mergeOrders(localOrders).filter((order) => scopedStoreIds.has(order.storeId));
+  const [realOrders, setRealOrders] = React.useState<Order[]>([]);
+
+  React.useEffect(() => {
+    if (!scopeReady || scopedStoreIds.size === 0) {
+      setRealOrders([]);
+      return;
+    }
+
+    let active = true;
+
+    Promise.all(Array.from(scopedStoreIds).map((storeId) => getRealOrdersByStore(storeId))).then(
+      (results) => {
+        if (active) setRealOrders(results.flat());
+      },
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [scopeReady, scopedStoreIds]);
+
+  const orders = React.useMemo(() => {
+    const merged = new Map<string, Order>();
+    mergeOrders(localOrders).forEach((order) => merged.set(order.id, order));
+    realOrders.forEach((order) => merged.set(order.id, order));
+    return Array.from(merged.values()).filter((order) => scopedStoreIds.has(order.storeId));
+  }, [localOrders, realOrders, scopedStoreIds]);
   const assignments = mergeAssignments(localAssignments);
   const filteredOrders = orders.filter(
     (order) =>

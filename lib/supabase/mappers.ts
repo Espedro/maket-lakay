@@ -1,5 +1,5 @@
 import type { Json, Tables, TablesInsert } from "@/types/database";
-import type { Category, Product, Store, Vendor } from "@/types";
+import type { Category, Order, Product, Store, Vendor } from "@/types";
 import type { ManagedProduct } from "@/lib/vendor-products";
 
 export function mapCategoryRow(row: Tables<"categories">): Category {
@@ -138,5 +138,32 @@ export function toManagedProductRow(product: ManagedProduct): TablesInsert<"prod
     is_recommended: product.isRecommended ?? false,
     sku: product.sku,
     metadata: toManagedProductMetadata(product) as unknown as Json,
+  };
+}
+
+interface OrderRowWithItems extends Tables<"orders"> {
+  order_items: Tables<"order_items">[];
+}
+
+export function mapOrderRow(row: OrderRowWithItems): Order {
+  return {
+    id: row.id,
+    customerId: row.customer_profile_id,
+    storeId: row.store_id,
+    status: row.status,
+    currency: row.currency === "HTG" ? "HTG" : "USD",
+    subtotal: Number(row.subtotal),
+    deliveryFee: Number(row.delivery_fee),
+    total: Number(row.total),
+    items: (row.order_items ?? []).map((item) => ({
+      productId: item.product_id ?? "",
+      productName: item.product_name,
+      quantity: item.quantity,
+      unitPrice: Number(item.unit_price),
+    })),
+    placedAt: row.placed_at,
+    deliveryCity: row.delivery_city ?? "",
+    trackingNumber: row.tracking_number ?? undefined,
+    estimatedDeliveryAt: row.estimated_delivery_at ?? undefined,
   };
 }

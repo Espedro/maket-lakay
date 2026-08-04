@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { customerAddresses, paymentMethods } from "@/data/mock-data";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import { buildCartSummary, createOrderSnapshot, type CartSummary } from "@/lib/checkout";
 import {
@@ -40,6 +41,7 @@ import {
 import { createWebhookEvent, processPayment } from "@/lib/payments";
 import { checkoutAddressSchema, type CheckoutAddressInput } from "@/lib/schemas";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import { createRealOrders } from "@/services/orders";
 import type { CustomerAddress, PaymentMethod } from "@/types";
 
 type CheckoutStep = "address" | "delivery" | "payment" | "review";
@@ -162,6 +164,7 @@ function getSelectedAddressDetails(address: CheckoutAddress) {
 
 export function CheckoutPageClient() {
   const router = useRouter();
+  const { user, isReady: authReady } = useAuth();
   const {
     cart,
     clearCart,
@@ -217,7 +220,7 @@ export function CheckoutPageClient() {
   function createAddress(values: CheckoutAddressInput) {
     const newAddress: CheckoutAddress = {
       id: `addr-local-${Date.now()}`,
-      customerId: "customer-jean",
+      customerId: user?.id ?? "customer-jean",
       label: "New address",
       recipientName: `${values.firstName} ${values.lastName}`,
       phone: values.phone,
@@ -263,7 +266,7 @@ export function CheckoutPageClient() {
   }
 
   async function placeOrder() {
-    if (!canPlaceOrder || isProcessing || !selectedAddress) {
+    if (!canPlaceOrder || isProcessing || !selectedAddress || !user) {
       return;
     }
 
@@ -337,17 +340,65 @@ export function CheckoutPageClient() {
       saveDeliveryAssignment(assignment);
       saveCustomerNotification(createCustomerNotification(order, order.status));
     });
+
+    const realOrderResult = await createRealOrders(
+      createdOrders.map((order) => ({
+        id: order.id,
+        customerProfileId: user.id,
+        storeId: order.storeId,
+        status: order.status,
+        currency: order.currency,
+        subtotal: order.subtotal,
+        deliveryFee: order.deliveryFee,
+        total: order.total,
+        placedAt: order.placedAt,
+        deliveryCity: order.deliveryCity,
+        trackingNumber: order.trackingNumber,
+        estimatedDeliveryAt: order.estimatedDeliveryAt,
+        items: order.items,
+      })),
+    );
+
+    if (!realOrderResult.ok) {
+      toast({
+        title: "Order saved locally only",
+        description: realOrderResult.reason ?? "The real order record could not be created.",
+        variant: "destructive",
+      });
+    }
+
     clearCart();
     router.push("/checkout/confirmation");
   }
 
-  if (!isReady) {
+  if (!isReady || !authReady) {
     return (
       <div className="grid gap-4">
         <div className="h-20 animate-pulse border bg-muted" />
         <div className="h-72 animate-pulse border bg-muted" />
         <div className="h-48 animate-pulse border bg-muted" />
       </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <section className="grid min-h-72 place-items-center border border-dashed bg-white/70 p-8 text-center">
+        <div>
+          <h3 className="text-lg font-semibold">Log in to check out</h3>
+          <p className="mt-2 max-w-md text-sm text-muted-foreground">
+            Orders are linked to your account so you and the vendor can track them.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <Button asChild>
+              <Link href="/login">Log in</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/signup">Sign up</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
     );
   }
 
