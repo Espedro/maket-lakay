@@ -1,5 +1,6 @@
-import type { Tables } from "@/types/database";
+import type { Json, Tables, TablesInsert } from "@/types/database";
 import type { Category, Product, Store, Vendor } from "@/types";
+import type { ManagedProduct } from "@/lib/vendor-products";
 
 export function mapCategoryRow(row: Tables<"categories">): Category {
   return {
@@ -67,5 +68,75 @@ export function mapProductRow(row: Tables<"products">): Product {
     isTrending: row.is_trending,
     isNewArrival: row.is_new_arrival,
     isRecommended: row.is_recommended,
+  };
+}
+
+interface ManagedProductMetadata {
+  condition?: ManagedProduct["condition"];
+  images?: string[];
+  variants?: ManagedProduct["variants"];
+  attributes?: ManagedProduct["attributes"];
+  weight?: number;
+  deliverySettings?: string;
+  reservedQuantity?: number;
+  lowStockThreshold?: number;
+  stockHistory?: ManagedProduct["stockHistory"];
+}
+
+export function mapManagedProductRow(row: Tables<"products">): ManagedProduct {
+  const product = mapProductRow(row);
+  const metadata = (row.metadata as ManagedProductMetadata | null) ?? {};
+
+  return {
+    ...product,
+    sku: row.sku ?? "",
+    condition: metadata.condition ?? "new",
+    images: metadata.images?.length ? metadata.images : [product.image],
+    variants: metadata.variants ?? [],
+    attributes: metadata.attributes ?? [],
+    weight: metadata.weight ?? 0,
+    deliverySettings: metadata.deliverySettings ?? "",
+    reservedQuantity: metadata.reservedQuantity ?? 0,
+    lowStockThreshold: metadata.lowStockThreshold ?? 10,
+    stockHistory: metadata.stockHistory ?? [],
+  };
+}
+
+export function toManagedProductMetadata(product: ManagedProduct): ManagedProductMetadata {
+  return {
+    condition: product.condition,
+    images: product.images,
+    variants: product.variants,
+    attributes: product.attributes,
+    weight: product.weight,
+    deliverySettings: product.deliverySettings,
+    reservedQuantity: product.reservedQuantity,
+    lowStockThreshold: product.lowStockThreshold,
+    stockHistory: product.stockHistory,
+  };
+}
+
+export function toManagedProductRow(product: ManagedProduct): TablesInsert<"products"> {
+  return {
+    id: product.id,
+    store_id: product.storeId,
+    category_id: product.categoryId,
+    name: product.name,
+    slug: product.slug,
+    description: product.description,
+    brand: product.brand ?? null,
+    price: product.price,
+    compare_at_price: product.compareAtPrice ?? null,
+    currency: product.currency,
+    image: product.image,
+    stock: product.stock,
+    status: product.status,
+    is_featured: product.isFeatured ?? false,
+    is_local_made: product.isLocalMade ?? false,
+    is_trending: product.isTrending ?? false,
+    is_new_arrival: product.isNewArrival ?? false,
+    is_recommended: product.isRecommended ?? false,
+    sku: product.sku,
+    metadata: toManagedProductMetadata(product) as unknown as Json,
   };
 }

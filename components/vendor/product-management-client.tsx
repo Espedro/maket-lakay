@@ -145,7 +145,7 @@ export function ProductManagementClient() {
             </Button>
             <Button variant="outline" onClick={resetProducts}>
               <RotateCcw className="size-4" />
-              Reset data
+              Refresh
             </Button>
           </div>
         </div>

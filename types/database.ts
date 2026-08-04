@@ -55,10 +55,12 @@ export type Database = {
           is_new_arrival: boolean
           is_recommended: boolean
           is_trending: boolean
+          metadata: Json
           name: string
           price: number
           rating: number
           review_count: number
+          sku: string | null
           slug: string
           status: Database["public"]["Enums"]["product_status"]
           stock: number
@@ -77,10 +79,12 @@ export type Database = {
           is_new_arrival?: boolean
           is_recommended?: boolean
           is_trending?: boolean
+          metadata?: Json
           name: string
           price: number
           rating?: number
           review_count?: number
+          sku?: string | null
           slug: string
           status?: Database["public"]["Enums"]["product_status"]
           stock?: number
@@ -99,10 +103,12 @@ export type Database = {
           is_new_arrival?: boolean
           is_recommended?: boolean
           is_trending?: boolean
+          metadata?: Json
           name?: string
           price?: number
           rating?: number
           review_count?: number
+          sku?: string | null
           slug?: string
           status?: Database["public"]["Enums"]["product_status"]
           stock?: number
