@@ -9,12 +9,13 @@ import { RatingStars } from "@/components/marketplace/rating-stars";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import Link from "next/link";
+
 import { customers, products, stores } from "@/data/mock-data";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import {
-  createProductReview,
-  createStoreReview,
   getProductReviewSummary,
   getStoreRatingSummary,
   mergeReviews,
@@ -27,19 +28,39 @@ import {
   type StoreReviewInput,
 } from "@/lib/schemas";
 import { formatDate } from "@/lib/utils";
+import {
+  createRealProductReview,
+  createRealStoreReview,
+  getAllRealProductReviews,
+  getAllRealStoreReviews,
+} from "@/services/reviews";
+import type { Review, StoreReview } from "@/types";
 
 function customerName(customerId: string) {
   return customers.find((customer) => customer.id === customerId)?.name ?? "Customer";
 }
 
 export function ReviewsAndRatingsClient() {
-  const {
-    isReady,
-    localReviews,
-    localStoreReviews,
-    saveProductReview,
-    saveStoreReview,
-  } = useMarketplaceStorage();
+  const { isReady } = useMarketplaceStorage();
+  const { user, isReady: authReady } = useAuth();
+  const [realReviews, setRealReviews] = React.useState<Review[]>([]);
+  const [realStoreReviews, setRealStoreReviews] = React.useState<StoreReview[]>([]);
+  const [realReviewsReady, setRealReviewsReady] = React.useState(false);
+
+  const refreshRealReviews = React.useCallback(async () => {
+    const [fetchedReviews, fetchedStoreReviews] = await Promise.all([
+      getAllRealProductReviews(),
+      getAllRealStoreReviews(),
+    ]);
+    setRealReviews(fetchedReviews);
+    setRealStoreReviews(fetchedStoreReviews);
+    setRealReviewsReady(true);
+  }, []);
+
+  React.useEffect(() => {
+    refreshRealReviews();
+  }, [refreshRealReviews]);
+
   const productReviewForm = useForm<ProductReviewInput>({
     resolver: zodResolver(productReviewSchema),
     defaultValues: {
@@ -58,52 +79,74 @@ export function ReviewsAndRatingsClient() {
       body: "",
     },
   });
-  const allReviews = mergeReviews(localReviews);
-  const allStoreReviews = mergeStoreReviews(localStoreReviews);
+  const allReviews = mergeReviews(realReviews);
+  const allStoreReviews = mergeStoreReviews(realStoreReviews);
   const topProducts = products.slice(0, 6).map((product) => ({
     product,
-    summary: getProductReviewSummary(product.id, localReviews),
+    summary: getProductReviewSummary(product.id, realReviews),
   }));
 
-  function submitProductReview(input: ProductReviewInput) {
-    saveProductReview(
-      createProductReview({
-        ...input,
-        customerId: "customer-jean",
-      }),
-    );
+  async function submitProductReview(input: ProductReviewInput) {
+    if (!user) return;
+
+    const result = await createRealProductReview({
+      productId: input.productId,
+      customerProfileId: user.id,
+      rating: input.rating,
+      title: input.title,
+      body: input.body,
+    });
+
+    if (!result.ok) {
+      toast({
+        title: "Could not publish review",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
     productReviewForm.reset({
       productId: input.productId,
       rating: 5,
       title: "",
       body: "",
     });
-    toast({
-      title: "Review published",
-      description: "Your product review was saved locally.",
-    });
+    toast({ title: "Review published", description: "Your product review is live." });
+    await refreshRealReviews();
   }
 
-  function submitStoreReview(input: StoreReviewInput) {
-    saveStoreReview(
-      createStoreReview({
-        ...input,
-        customerId: "customer-jean",
-      }),
-    );
+  async function submitStoreReview(input: StoreReviewInput) {
+    if (!user) return;
+
+    const result = await createRealStoreReview({
+      storeId: input.storeId,
+      customerProfileId: user.id,
+      rating: input.rating,
+      title: input.title,
+      body: input.body,
+    });
+
+    if (!result.ok) {
+      toast({
+        title: "Could not publish store rating",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
     storeReviewForm.reset({
       storeId: input.storeId,
       rating: 5,
       title: "",
       body: "",
     });
-    toast({
-      title: "Store rating published",
-      description: "Your store rating was saved locally.",
-    });
+    toast({ title: "Store rating published", description: "Your store rating is live." });
+    await refreshRealReviews();
   }
 
-  if (!isReady) {
+  if (!isReady || !authReady || !realReviewsReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 
@@ -164,7 +207,7 @@ export function ReviewsAndRatingsClient() {
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-3">
               {stores.map((store) => {
-                const summary = getStoreRatingSummary(store.id, localStoreReviews);
+                const summary = getStoreRatingSummary(store.id, realStoreReviews);
 
                 return (
                   <div key={store.id} className="border p-4">
@@ -218,6 +261,20 @@ export function ReviewsAndRatingsClient() {
         </section>
 
         <aside className="space-y-4">
+          {!user ? (
+            <Card>
+              <CardContent className="space-y-3 p-5 text-center">
+                <p className="font-black">Log in to write a review</p>
+                <p className="text-sm text-muted-foreground">
+                  Reviews are linked to your account so shoppers know they are real.
+                </p>
+                <Button asChild className="w-full">
+                  <Link href="/login">Log in</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -307,6 +364,8 @@ export function ReviewsAndRatingsClient() {
               </form>
             </CardContent>
           </Card>
+            </>
+          )}
         </aside>
       </div>
     </div>

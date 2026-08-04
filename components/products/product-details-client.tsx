@@ -32,7 +32,8 @@ import { toast } from "@/hooks/use-toast";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import { getProductReviewSummary, mergeReviews } from "@/lib/support";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import type { Product } from "@/types";
+import { getRealProductReviews } from "@/services/reviews";
+import type { Product, Review } from "@/types";
 
 interface ProductDetailsClientProps {
   product?: Product;
@@ -122,7 +123,6 @@ export function ProductDetailsClient({ product }: ProductDetailsClientProps) {
     addToCart,
     isInWishlist,
     isReady,
-    localReviews,
     recentlyViewed,
     toggleWishlist,
     trackRecentlyViewed,
@@ -131,6 +131,21 @@ export function ProductDetailsClient({ product }: ProductDetailsClientProps) {
   const [quantity, setQuantity] = React.useState(1);
   const [selectedColor, setSelectedColor] = React.useState("");
   const [selectedSize, setSelectedSize] = React.useState("");
+  const [realReviews, setRealReviews] = React.useState<Review[]>([]);
+
+  React.useEffect(() => {
+    if (!product) return;
+
+    let active = true;
+
+    getRealProductReviews(product.id).then((fetched) => {
+      if (active) setRealReviews(fetched);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [product]);
 
   React.useEffect(() => {
     if (product) {
@@ -189,8 +204,8 @@ export function ProductDetailsClient({ product }: ProductDetailsClientProps) {
   );
   const purchaseDisabled = productUnavailable || variantUnavailable;
   const wished = isInWishlist(product.id);
-  const reviewSummary = getProductReviewSummary(product.id, localReviews);
-  const productReviews = mergeReviews(localReviews).filter(
+  const reviewSummary = getProductReviewSummary(product.id, realReviews);
+  const productReviews = mergeReviews(realReviews).filter(
     (review) => review.productId === product.id,
   );
   const relatedProducts = products

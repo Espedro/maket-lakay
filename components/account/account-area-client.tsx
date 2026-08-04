@@ -58,6 +58,7 @@ import { toast } from "@/hooks/use-toast";
 import { getOrderTrackingEvents, mergeOrders } from "@/lib/orders";
 import { getRealOrdersByCustomer } from "@/services/orders";
 import { deleteRealAddress, getRealAddresses, saveRealAddress } from "@/services/users";
+import { getRealCustomerProductReviews, getRealCustomerStoreReviews } from "@/services/reviews";
 import {
   accountProfileSchema,
   checkoutAddressSchema,
@@ -310,12 +311,49 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
   }, [activeAccountId, localCustomerNotifications, readNotificationIds]);
-  const customerProductReviews = [...localReviews, ...reviews].filter(
-    (review) => review.customerId === activeAccountId,
-  );
-  const customerStoreReviews = [...localStoreReviews, ...storeReviews].filter(
-    (review) => review.customerId === activeAccountId,
-  );
+  const [realProductReviews, setRealProductReviews] = React.useState<Review[]>([]);
+  const [realStoreReviews, setRealStoreReviews] = React.useState<StoreReview[]>([]);
+
+  React.useEffect(() => {
+    if (!activeAccountId) {
+      setRealProductReviews([]);
+      setRealStoreReviews([]);
+      return;
+    }
+
+    let active = true;
+
+    Promise.all([
+      getRealCustomerProductReviews(activeAccountId),
+      getRealCustomerStoreReviews(activeAccountId),
+    ]).then(([fetchedProductReviews, fetchedStoreReviews]) => {
+      if (active) {
+        setRealProductReviews(fetchedProductReviews);
+        setRealStoreReviews(fetchedStoreReviews);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [activeAccountId]);
+
+  const customerProductReviews = React.useMemo(() => {
+    const merged = new Map<string, Review>();
+    [...localReviews, ...reviews]
+      .filter((review) => review.customerId === activeAccountId)
+      .forEach((review) => merged.set(review.id, review));
+    realProductReviews.forEach((review) => merged.set(review.id, review));
+    return Array.from(merged.values());
+  }, [activeAccountId, localReviews, realProductReviews]);
+  const customerStoreReviews = React.useMemo(() => {
+    const merged = new Map<string, StoreReview>();
+    [...localStoreReviews, ...storeReviews]
+      .filter((review) => review.customerId === activeAccountId)
+      .forEach((review) => merged.set(review.id, review));
+    realStoreReviews.forEach((review) => merged.set(review.id, review));
+    return Array.from(merged.values());
+  }, [activeAccountId, localStoreReviews, realStoreReviews]);
   const selectedOrder = orderId
     ? orders.find((order) => order.id === decodeURIComponent(orderId))
     : undefined;

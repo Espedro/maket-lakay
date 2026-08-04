@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import * as React from "react";
 import { MapPin, Package, ShieldCheck } from "lucide-react";
 
 import { ProductDiscoveryView } from "@/components/discovery/product-discovery-view";
@@ -12,9 +13,10 @@ import { VerificationBadge } from "@/components/marketplace/verification-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { categories, reviews } from "@/data/mock-data";
+import { categories, storeReviews as mockStoreReviews } from "@/data/mock-data";
 import { cn } from "@/lib/utils";
-import type { Product, Store, Vendor } from "@/types";
+import { getRealStoreReviews } from "@/services/reviews";
+import type { Product, Store, StoreReview, Vendor } from "@/types";
 
 interface StoreDetailsClientProps {
   store: Store | undefined;
@@ -23,6 +25,22 @@ interface StoreDetailsClientProps {
 }
 
 export function StoreDetailsClient({ store, vendor, products }: StoreDetailsClientProps) {
+  const [realStoreReviews, setRealStoreReviews] = React.useState<StoreReview[]>([]);
+
+  React.useEffect(() => {
+    if (!store) return;
+
+    let active = true;
+
+    getRealStoreReviews(store.id).then((fetched) => {
+      if (active) setRealStoreReviews(fetched);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [store]);
+
   if (!store) {
     return (
       <div className="container space-y-5 py-6">
@@ -44,8 +62,10 @@ export function StoreDetailsClient({ store, vendor, products }: StoreDetailsClie
     .slice(0, 4);
   const categoryIds = new Set(storeProducts.map((product) => product.categoryId));
   const storeCategories = categories.filter((category) => categoryIds.has(category.id));
-  const productIds = new Set(storeProducts.map((product) => product.id));
-  const storeReviews = reviews.filter((review) => productIds.has(review.productId));
+  const storeReviews = [
+    ...realStoreReviews,
+    ...mockStoreReviews.filter((review) => review.storeId === store.id),
+  ];
 
   return (
     <div className="container space-y-6 py-6">

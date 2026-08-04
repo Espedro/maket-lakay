@@ -112,3 +112,31 @@ export async function getRealCustomerStoreReviews(customerProfileId: string): Pr
 
   return data.map(mapStoreReviewRow);
 }
+
+export async function getAllRealProductReviews(): Promise<Review[]> {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("product_reviews")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data.map(mapProductReviewRow);
+}
+
+export async function getAllRealStoreReviews(): Promise<StoreReview[]> {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("store_reviews")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data.map(mapStoreReviewRow);
+}
