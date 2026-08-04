@@ -1,11 +1,13 @@
 import { reviews } from "@/data/mock-data";
-import { mapProductRow } from "@/lib/supabase/mappers";
+import { mapCategoryRow, mapProductRow } from "@/lib/supabase/mappers";
 import { createPublicClient } from "@/lib/supabase/public";
 import {
   discoverProducts,
   getBrands,
+  type ProductDiscoveryContext,
   type ProductDiscoveryFilters,
 } from "@/lib/product-discovery";
+import { getStores, getVendors } from "@/services/vendors";
 
 async function fetchAllProducts() {
   const supabase = createPublicClient();
@@ -18,9 +20,30 @@ async function fetchAllProducts() {
   return (data ?? []).map(mapProductRow);
 }
 
+export async function getCategories() {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase.from("categories").select("*");
+
+  if (error) {
+    throw new Error(`Failed to load categories: ${error.message}`);
+  }
+
+  return (data ?? []).map(mapCategoryRow);
+}
+
+async function fetchDiscoveryContext(): Promise<ProductDiscoveryContext> {
+  const [categories, stores, vendors] = await Promise.all([
+    getCategories(),
+    getStores(),
+    getVendors(),
+  ]);
+
+  return { categories, stores, vendors };
+}
+
 export async function getProducts(filters: ProductDiscoveryFilters = {}) {
-  const products = await fetchAllProducts();
-  return discoverProducts(products, filters);
+  const [products, context] = await Promise.all([fetchAllProducts(), fetchDiscoveryContext()]);
+  return discoverProducts(products, filters, context);
 }
 
 export async function getProductById(productId: string) {

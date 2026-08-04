@@ -29,30 +29,38 @@ export interface ProductDiscoveryContext {
   vendors: Vendor[];
 }
 
+const defaultContext: ProductDiscoveryContext = { categories, stores, vendors };
+
 const HTG_TO_USD = 0.0076;
 
 export function normalizeProductPrice(product: Product) {
   return product.currency === "HTG" ? product.price * HTG_TO_USD : product.price;
 }
 
-export function getProductCategory(product: Product) {
-  return categories.find((category) => category.id === product.categoryId);
+export function getProductCategory(product: Product, categoriesList: Category[] = categories) {
+  return categoriesList.find((category) => category.id === product.categoryId);
 }
 
-export function getProductStore(product: Product) {
-  return stores.find((store) => store.id === product.storeId);
+export function getProductStore(product: Product, storesList: Store[] = stores) {
+  return storesList.find((store) => store.id === product.storeId);
 }
 
-export function getStoreVendor(store: Store | undefined) {
-  return store ? vendors.find((vendor) => vendor.id === store.vendorId) : undefined;
+export function getStoreVendor(store: Store | undefined, vendorsList: Vendor[] = vendors) {
+  return store ? vendorsList.find((vendor) => vendor.id === store.vendorId) : undefined;
 }
 
-export function getProductVendor(product: Product) {
-  return getStoreVendor(getProductStore(product));
+export function getProductVendor(
+  product: Product,
+  storesList: Store[] = stores,
+  vendorsList: Vendor[] = vendors,
+) {
+  return getStoreVendor(getProductStore(product, storesList), vendorsList);
 }
 
-export function getDiscoveryContext(): ProductDiscoveryContext {
-  return { categories, stores, vendors };
+export function getDiscoveryContext(
+  overrides: Partial<ProductDiscoveryContext> = {},
+): ProductDiscoveryContext {
+  return { ...defaultContext, ...overrides };
 }
 
 export function getBrands(sourceProducts = products) {
@@ -61,25 +69,29 @@ export function getBrands(sourceProducts = products) {
   ).sort() as string[];
 }
 
-export function getStoreCategories(storeId: string) {
+export function getStoreCategories(
+  storeId: string,
+  sourceProducts: Product[] = products,
+  categoriesList: Category[] = categories,
+) {
   const categoryIds = new Set(
-    products
+    sourceProducts
       .filter((product) => product.storeId === storeId)
       .map((product) => product.categoryId),
   );
 
-  return categories.filter((category) => categoryIds.has(category.id));
+  return categoriesList.filter((category) => categoryIds.has(category.id));
 }
 
-function matchesSearch(product: Product, query: string) {
+function matchesSearch(product: Product, query: string, context: ProductDiscoveryContext) {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) {
     return true;
   }
 
-  const category = getProductCategory(product);
-  const store = getProductStore(product);
-  const vendor = getProductVendor(product);
+  const category = getProductCategory(product, context.categories);
+  const store = getProductStore(product, context.stores);
+  const vendor = getProductVendor(product, context.stores, context.vendors);
   const haystack = [
     product.name,
     product.description,
@@ -115,13 +127,14 @@ function matchesAvailability(product: Product, availability?: AvailabilityFilter
 export function filterProducts(
   sourceProducts: Product[],
   filters: ProductDiscoveryFilters,
+  context: ProductDiscoveryContext = defaultContext,
 ) {
   return sourceProducts.filter((product) => {
-    const store = getProductStore(product);
+    const store = getProductStore(product, context.stores);
     const normalizedPrice = normalizeProductPrice(product);
 
     return (
-      matchesSearch(product, filters.query ?? "") &&
+      matchesSearch(product, filters.query ?? "", context) &&
       (!filters.categoryId || product.categoryId === filters.categoryId) &&
       (!filters.storeId || product.storeId === filters.storeId) &&
       (!filters.vendorId || store?.vendorId === filters.vendorId) &&
@@ -163,17 +176,18 @@ export function sortProducts(sourceProducts: Product[], sort: ProductSort = "fea
 export function discoverProducts(
   sourceProducts: Product[],
   filters: ProductDiscoveryFilters,
+  context: ProductDiscoveryContext = defaultContext,
 ) {
-  return sortProducts(filterProducts(sourceProducts, filters), filters.sort);
+  return sortProducts(filterProducts(sourceProducts, filters, context), filters.sort);
 }
 
-export function searchStores(query: string) {
+export function searchStores(query: string, storesList: Store[] = stores) {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) {
-    return stores.slice(0, 3);
+    return storesList.slice(0, 3);
   }
 
-  return stores.filter((store) =>
+  return storesList.filter((store) =>
     [store.name, store.description, store.city, store.country]
       .filter(Boolean)
       .join(" ")
@@ -182,13 +196,13 @@ export function searchStores(query: string) {
   );
 }
 
-export function searchCategories(query: string) {
+export function searchCategories(query: string, categoriesList: Category[] = categories) {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) {
-    return categories.slice(0, 5);
+    return categoriesList.slice(0, 5);
   }
 
-  return categories.filter((category) =>
+  return categoriesList.filter((category) =>
     [category.name, category.description].join(" ").toLowerCase().includes(normalizedQuery),
   );
 }
