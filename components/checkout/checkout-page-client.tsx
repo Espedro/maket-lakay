@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { useForm } from "react-hook-form";
+import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -40,10 +41,11 @@ import {
 } from "@/lib/orders";
 import { createWebhookEvent, processPayment } from "@/lib/payments";
 import { checkoutAddressSchema, type CheckoutAddressInput } from "@/lib/schemas";
+import { getStripeClient, isStripeConfigured } from "@/lib/stripe/client";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { createRealOrders } from "@/services/orders";
 import { getRealAddresses, saveRealAddress } from "@/services/users";
-import type { CustomerAddress, PaymentMethod } from "@/types";
+import type { CustomerAddress, PaymentMethod, PaymentRecord } from "@/types";
 
 type CheckoutStep = "address" | "delivery" | "payment" | "review";
 
@@ -82,7 +84,7 @@ const paymentOptions = [
   {
     id: "card",
     label: "Credit or Debit Card",
-    description: "Visual test card form only. No real card data is stored.",
+    description: "Secure card payment via Stripe. Card details never touch our servers.",
     icon: CreditCard,
   },
   {
@@ -157,6 +159,59 @@ function getSelectedAddressDetails(address: CustomerAddress) {
     .filter(Boolean)
     .join(", ");
 }
+
+type CardConfirmResult =
+  | { ok: true; paymentIntentId: string }
+  | { ok: false; reason: string };
+
+interface CardPaymentHandle {
+  confirmPayment: () => Promise<CardConfirmResult>;
+}
+
+/**
+ * Mounted inside <Elements>, which is the only place Stripe's useStripe()/
+ * useElements() hooks work. Exposes an imperative confirmPayment() so
+ * placeOrder() (in the parent, outside the Elements tree) can trigger the
+ * real card charge without itself needing to live inside that tree.
+ */
+const CardPaymentStep = React.forwardRef<CardPaymentHandle, { onReady: (ready: boolean) => void }>(
+  function CardPaymentStep({ onReady }, ref) {
+    const stripe = useStripe();
+    const elements = useElements();
+
+    React.useEffect(() => {
+      onReady(Boolean(stripe && elements));
+    }, [stripe, elements, onReady]);
+
+    React.useImperativeHandle(ref, () => ({
+      async confirmPayment(): Promise<CardConfirmResult> {
+        if (!stripe || !elements) {
+          return { ok: false, reason: "The card form is not ready yet." };
+        }
+
+        const { error, paymentIntent } = await stripe.confirmPayment({
+          elements,
+          redirect: "if_required",
+          confirmParams: {
+            return_url: `${window.location.origin}/checkout/confirmation`,
+          },
+        });
+
+        if (error) {
+          return { ok: false, reason: error.message ?? "The card was declined." };
+        }
+
+        if (paymentIntent?.status !== "succeeded") {
+          return { ok: false, reason: `Payment status: ${paymentIntent?.status ?? "unknown"}.` };
+        }
+
+        return { ok: true, paymentIntentId: paymentIntent.id };
+      },
+    }));
+
+    return <PaymentElement />;
+  },
+);
 
 export function CheckoutPageClient() {
   const router = useRouter();
@@ -234,8 +289,61 @@ export function CheckoutPageClient() {
   const discount = 0;
   const total = Math.max(0, summary.subtotal + deliveryFee - discount);
   const currentStepIndex = checkoutSteps.findIndex((item) => item.id === step);
+
+  const stripeConfigured = isStripeConfigured();
+  const stripePromise = React.useMemo(() => getStripeClient(), []);
+  const cardPaymentRef = React.useRef<CardPaymentHandle>(null);
+  const [cardReady, setCardReady] = React.useState(false);
+  const [cardClientSecret, setCardClientSecret] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!stripeConfigured || paymentMethodId !== "card" || total <= 0) {
+      setCardClientSecret(null);
+      setCardReady(false);
+      return;
+    }
+
+    let active = true;
+
+    fetch("/api/checkout/create-payment-intent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: total }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!active) return;
+        if (data.clientSecret) {
+          setCardClientSecret(data.clientSecret);
+        } else {
+          toast({
+            title: "Card payment unavailable",
+            description: data.error ?? "Could not start a card payment.",
+            variant: "destructive",
+          });
+        }
+      })
+      .catch(() => {
+        if (active) {
+          toast({
+            title: "Card payment unavailable",
+            description: "Could not reach the payment server.",
+            variant: "destructive",
+          });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [stripeConfigured, paymentMethodId, total]);
+
   const canPlaceOrder =
-    isReady && cart.length > 0 && selectedAddress && summary.stockIssues.length === 0;
+    isReady &&
+    cart.length > 0 &&
+    selectedAddress &&
+    summary.stockIssues.length === 0 &&
+    (paymentMethodId !== "card" || (stripeConfigured && cardReady));
 
   async function createAddress(values: CheckoutAddressInput) {
     if (!user) return;
@@ -313,7 +421,6 @@ export function CheckoutPageClient() {
     }
 
     setIsProcessing(true);
-    await new Promise((resolve) => window.setTimeout(resolve, 700));
 
     const orderId = `ML-${Date.now().toString().slice(-6)}`;
     const adjustedSummary = {
@@ -329,25 +436,60 @@ export function CheckoutPageClient() {
             : 0,
       })),
     };
-    const mockPaymentMethod = getMockPaymentMethod(paymentMethodId);
-    const { payment } = await processPayment({
-      orderId,
-      amount: total,
-      currency: "USD",
-      method: mockPaymentMethod,
-    });
 
-    if (payment.status === "failed") {
-      savePaymentRecord(payment);
-      savePaymentWebhook(createWebhookEvent(payment));
-      setIsProcessing(false);
-      setStep("payment");
-      toast({
-        title: "Payment failed",
-        description: payment.failureReason ?? "Choose another payment method and try again.",
-        variant: "destructive",
+    let payment: PaymentRecord;
+
+    if (paymentMethodId === "card") {
+      const result = await cardPaymentRef.current?.confirmPayment();
+
+      if (!result || !result.ok) {
+        setIsProcessing(false);
+        toast({
+          title: "Payment failed",
+          description: result?.reason ?? "Card payment could not be confirmed.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      payment = {
+        id: `payrec-${Date.now()}`,
+        orderId,
+        provider: "card",
+        methodId: "pay-card",
+        status: "captured",
+        amount: total,
+        currency: "USD",
+        providerReference: result.paymentIntentId,
+        verificationCode: result.paymentIntentId,
+        createdAt: new Date().toISOString(),
+        verifiedAt: new Date().toISOString(),
+      };
+    } else {
+      await new Promise((resolve) => window.setTimeout(resolve, 700));
+
+      const mockPaymentMethod = getMockPaymentMethod(paymentMethodId);
+      const result = await processPayment({
+        orderId,
+        amount: total,
+        currency: "USD",
+        method: mockPaymentMethod,
       });
-      return;
+
+      if (result.payment.status === "failed") {
+        savePaymentRecord(result.payment);
+        savePaymentWebhook(createWebhookEvent(result.payment));
+        setIsProcessing(false);
+        setStep("payment");
+        toast({
+          title: "Payment failed",
+          description: result.payment.failureReason ?? "Choose another payment method and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      payment = result.payment;
     }
 
     const snapshot = createOrderSnapshot(adjustedSummary, selectedAddress.id, paymentMethodId, payment, {
@@ -630,7 +772,8 @@ export function CheckoutPageClient() {
               <h2 className="text-xl font-black">Digital payment method</h2>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Frontend simulation only. Do not enter real sensitive payment data.
+              Card payments are processed securely through Stripe. MonCash, NatCash, bank
+              transfer, and the declined-test option remain frontend simulations for now.
             </p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {paymentOptions.map((payment) => {
@@ -662,15 +805,22 @@ export function CheckoutPageClient() {
 
             {paymentMethodId === "card" ? (
               <div className="mt-5 border bg-muted/30 p-4">
-                <h3 className="font-black">Test card preview</h3>
-                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_120px_100px]">
-                  <Input className={fieldClassName} placeholder="4242 4242 4242 4242" />
-                  <Input className={fieldClassName} placeholder="MM/YY" />
-                  <Input className={fieldClassName} placeholder="CVV" />
-                </div>
-                <p className="mt-2 text-xs font-semibold text-muted-foreground">
-                  These fields are visual placeholders and are not saved.
-                </p>
+                <h3 className="font-black">Card details</h3>
+                {!stripeConfigured ? (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Card payments are not configured yet. Choose another payment method for now.
+                  </p>
+                ) : cardClientSecret && stripePromise ? (
+                  <div className="mt-4">
+                    <Elements stripe={stripePromise} options={{ clientSecret: cardClientSecret }}>
+                      <CardPaymentStep ref={cardPaymentRef} onReady={setCardReady} />
+                    </Elements>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Preparing the secure card form...
+                  </p>
+                )}
               </div>
             ) : null}
           </section>
