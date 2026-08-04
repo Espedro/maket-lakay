@@ -90,3 +90,15 @@ export async function getRealOrdersByCustomer(customerProfileId: string): Promis
 
   return data.map(mapOrderRow);
 }
+
+/** Admin-only: relies on the admin RLS bypass to see every order. */
+export async function getAllRealOrders(): Promise<Order[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from("orders").select("*, order_items(*)");
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data.map(mapOrderRow);
+}

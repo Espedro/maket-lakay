@@ -25,6 +25,7 @@ import {
   updateOrderStatus,
 } from "@/lib/orders";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { getAllRealOrders } from "@/services/orders";
 import type { Order, OrderStatus, RefundRecord } from "@/types";
 
 interface AdminOrderDetailsClientProps {
@@ -63,10 +64,22 @@ export function AdminOrderDetailsClient({ orderId }: AdminOrderDetailsClientProp
   const { isReady: operationsReady, markOrderForReview, markRefundIssued, state } =
     useAdminOperations();
   const [pendingAction, setPendingAction] = React.useState<OrderAction | null>(null);
-  const orders = mergeOrders(localOrders);
-  const order = orders.find((item) => item.id === orderId);
+  const [realOrders, setRealOrders] = React.useState<Order[]>([]);
+  const [realOrdersReady, setRealOrdersReady] = React.useState(false);
 
-  if (!storageReady || !operationsReady) {
+  React.useEffect(() => {
+    getAllRealOrders().then((fetched) => {
+      setRealOrders(fetched);
+      setRealOrdersReady(true);
+    });
+  }, []);
+
+  const orders = mergeOrders(localOrders);
+  const order =
+    orders.find((item) => item.id === orderId) ??
+    realOrders.find((item) => item.id === orderId);
+
+  if (!storageReady || !operationsReady || !realOrdersReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 

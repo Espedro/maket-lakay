@@ -28,6 +28,7 @@ import {
   updateOrderStatus,
 } from "@/lib/orders";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { getAllRealOrders } from "@/services/orders";
 import type { Order, OrderStatus, PaymentStatus, RefundRecord } from "@/types";
 
 type OrderAction =
@@ -164,7 +165,18 @@ export function AdminOrdersClient() {
   const [categoryFilter, setCategoryFilter] = React.useState("all");
   const [dateFilter, setDateFilter] = React.useState<DateFilter>("all");
   const [pendingAction, setPendingAction] = React.useState<OrderAction | null>(null);
-  const orders = mergeOrders(localOrders);
+  const [realOrders, setRealOrders] = React.useState<Order[]>([]);
+
+  React.useEffect(() => {
+    getAllRealOrders().then(setRealOrders);
+  }, []);
+
+  const orders = React.useMemo(() => {
+    const merged = new Map<string, Order>();
+    mergeOrders(localOrders).forEach((order) => merged.set(order.id, order));
+    realOrders.forEach((order) => merged.set(order.id, order));
+    return Array.from(merged.values());
+  }, [localOrders, realOrders]);
   const hasActiveFilters =
     query.trim() !== "" ||
     statusFilter !== "all" ||

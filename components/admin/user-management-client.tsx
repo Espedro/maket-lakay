@@ -16,8 +16,48 @@ import {
 import { Input } from "@/components/ui/input";
 import { ResponsiveDataView } from "@/components/ui/responsive-data-view";
 import { useAdminManagement } from "@/hooks/use-admin-management";
+import { toast } from "@/hooks/use-toast";
 import type { AdminAccountStatus, AdminUserRecord, AdminUserRole } from "@/lib/admin-management";
+import type { AppRole } from "@/lib/auth-roles";
 import { formatDate } from "@/lib/utils";
+import { getAllProfiles, updateProfileRole, type RealUserProfile } from "@/services/users";
+
+interface UserRow {
+  id: string;
+  name: string;
+  email: string;
+  location: string;
+  role: AdminUserRole | AppRole;
+  status: AdminAccountStatus;
+  registeredAt: string;
+  isReal: boolean;
+}
+
+function toUserRow(user: AdminUserRecord): UserRow {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    location: user.location,
+    role: user.role,
+    status: user.status,
+    registeredAt: user.registeredAt,
+    isReal: false,
+  };
+}
+
+function toRealUserRow(profile: RealUserProfile): UserRow {
+  return {
+    id: profile.id,
+    name: profile.name,
+    email: profile.email,
+    location: [profile.city, profile.country].filter(Boolean).join(", "),
+    role: profile.role,
+    status: "active",
+    registeredAt: profile.createdAt,
+    isReal: true,
+  };
+}
 
 type UserAction = {
   label: string;
@@ -46,7 +86,7 @@ function statusVariant(status: string) {
   return status === "active" ? "success" : "destructive";
 }
 
-function roleLabel(role: AdminUserRole) {
+function roleLabel(role: string) {
   return role.replaceAll("_", " ");
 }
 
@@ -59,9 +99,47 @@ export function UserManagementClient() {
   const [addUserForm, setAddUserForm] = React.useState<AddUserForm>(emptyUserForm);
   const [addUserError, setAddUserError] = React.useState("");
   const [pendingAction, setPendingAction] = React.useState<UserAction | null>(null);
-  const [selectedUser, setSelectedUser] = React.useState<AdminUserRecord | null>(null);
+  const [selectedUser, setSelectedUser] = React.useState<UserRow | null>(null);
+  const [realProfiles, setRealProfiles] = React.useState<RealUserProfile[]>([]);
+  const [realProfilesReady, setRealProfilesReady] = React.useState(false);
 
-  const userRows = state.users.filter((user) => {
+  const refreshRealProfiles = React.useCallback(async () => {
+    const profiles = await getAllProfiles();
+    setRealProfiles(profiles);
+    setRealProfilesReady(true);
+  }, []);
+
+  React.useEffect(() => {
+    refreshRealProfiles();
+  }, [refreshRealProfiles]);
+
+  async function handleRoleChange(user: UserRow, nextRole: string) {
+    if (user.isReal) {
+      const result = await updateProfileRole(user.id, nextRole as AppRole);
+
+      if (!result.ok) {
+        toast({
+          title: "Could not update role",
+          description: result.reason,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({ title: "Role updated", description: `${user.name} is now ${nextRole}.` });
+      await refreshRealProfiles();
+      return;
+    }
+
+    updateUserRole(user.id, nextRole as AdminUserRole);
+  }
+
+  const allUserRows: UserRow[] = [
+    ...realProfiles.map(toRealUserRow),
+    ...state.users.map(toUserRow),
+  ];
+
+  const userRows = allUserRows.filter((user) => {
     const normalizedQuery = query.toLowerCase();
     const matchesQuery =
       user.name.toLowerCase().includes(normalizedQuery) ||
@@ -114,40 +192,42 @@ export function UserManagementClient() {
     setAddUserOpen(false);
   }
 
-  function renderUserActions(user: AdminUserRecord) {
+  function renderUserActions(user: UserRow) {
     return (
       <>
         <Button type="button" variant="outline" size="sm" onClick={() => setSelectedUser(user)}>
           <Eye className="size-4" />
           View
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() =>
-            setPendingAction({
-              label: user.status === "suspended" ? "Reactivate user" : "Suspend user",
-              userId: user.id,
-              status: user.status === "suspended" ? "active" : "suspended",
-              message: `${user.name} will be ${
-                user.status === "suspended" ? "reactivated" : "suspended"
-              } locally.`,
-            })
-          }
-        >
-          {user.status === "suspended" ? (
-            <RotateCcw className="size-4" />
-          ) : (
-            <UserX className="size-4" />
-          )}
-          {user.status === "suspended" ? "Reactivate" : "Suspend"}
-        </Button>
+        {user.isReal ? null : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              setPendingAction({
+                label: user.status === "suspended" ? "Reactivate user" : "Suspend user",
+                userId: user.id,
+                status: user.status === "suspended" ? "active" : "suspended",
+                message: `${user.name} will be ${
+                  user.status === "suspended" ? "reactivated" : "suspended"
+                } locally.`,
+              })
+            }
+          >
+            {user.status === "suspended" ? (
+              <RotateCcw className="size-4" />
+            ) : (
+              <UserX className="size-4" />
+            )}
+            {user.status === "suspended" ? "Reactivate" : "Suspend"}
+          </Button>
+        )}
       </>
     );
   }
 
-  if (!isReady) {
+  if (!isReady || !realProfilesReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 
@@ -206,10 +286,18 @@ export function UserManagementClient() {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          ["Customers", state.users.filter((user) => user.role === "customer").length],
-          ["Vendor staff", state.users.filter((user) => user.role === "vendor_staff").length],
-          ["Support staff", state.users.filter((user) => user.role === "support_staff").length],
-          ["Suspended", state.users.filter((user) => user.status === "suspended").length],
+          ["Customers", allUserRows.filter((user) => user.role === "customer").length],
+          [
+            "Vendor staff",
+            allUserRows.filter((user) => user.role === "vendor_staff" || user.role === "vendor")
+              .length,
+          ],
+          [
+            "Support staff",
+            allUserRows.filter((user) => user.role === "support_staff" || user.role === "support")
+              .length,
+          ],
+          ["Suspended", allUserRows.filter((user) => user.status === "suspended").length],
         ].map(([label, value]) => (
           <div key={label} className="border bg-white p-5">
             <p className="text-sm text-muted-foreground">{label}</p>
@@ -259,13 +347,29 @@ export function UserManagementClient() {
                       aria-label={`Change role for ${user.name}`}
                       className="h-9 border bg-white px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       value={user.role}
-                      onChange={(event) => updateUserRole(user.id, event.target.value as AdminUserRole)}
+                      onChange={(event) => handleRoleChange(user, event.target.value)}
                     >
-                      <option value="customer">Customer</option>
-                      <option value="vendor_staff">Vendor staff</option>
-                      <option value="support_staff">Support staff</option>
-                      <option value="admin">Admin</option>
+                      {user.isReal ? (
+                        <>
+                          <option value="customer">Customer</option>
+                          <option value="vendor">Vendor</option>
+                          <option value="support">Support</option>
+                          <option value="admin">Admin</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="customer">Customer</option>
+                          <option value="vendor_staff">Vendor staff</option>
+                          <option value="support_staff">Support staff</option>
+                          <option value="admin">Admin</option>
+                        </>
+                      )}
                     </select>
+                    {user.isReal ? (
+                      <p className="mt-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                        Real account
+                      </p>
+                    ) : null}
                   </td>
                   <td className="py-3">{user.email}</td>
                   <td className="py-3">
