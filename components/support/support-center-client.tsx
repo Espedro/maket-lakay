@@ -31,19 +31,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { toast } from "@/hooks/use-toast";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import { addAuditLogEntry } from "@/lib/audit-log";
-import { mergeOrders } from "@/lib/orders";
 import {
-  appendDisputeEvidence,
   appendTicketMessage,
-  createDispute,
   createMarketplaceReport,
-  createRefundRequest,
   createSupportTicket,
   getReportTargetLabel,
   getTicketSlaStatus,
-  mergeDisputes,
   mergeMarketplaceReports,
-  mergeRefundRequests,
   mergeSupportTickets,
 } from "@/lib/support";
 import {
@@ -59,7 +53,15 @@ import {
   type SupportTicketInput,
 } from "@/lib/schemas";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import type { SupportTicket } from "@/types";
+import { getRealOrdersByCustomer } from "@/services/orders";
+import {
+  addRealDisputeEvidence,
+  createRealDispute,
+  createRealRefundRequest,
+  getRealDisputesForCustomer,
+  getRealRefundRequestsForCustomer,
+} from "@/services/support";
+import type { Dispute, Order, RefundRequest, SupportTicket } from "@/types";
 
 function fieldError(message?: string) {
   return message ? <p className="text-xs font-semibold text-destructive">{message}</p> : null;
@@ -120,31 +122,49 @@ function getPublicTicketTimeline(ticket: SupportTicket) {
 export function SupportCenterClient() {
   const {
     isReady,
-    localDisputes,
-    localOrders,
-    localRefundRequests,
     localReports,
     localSupportTickets,
-    saveDispute,
     saveMarketplaceReport,
-    saveRefundRequest,
     saveSupportTicket,
   } = useMarketplaceStorage();
   const { user: currentUser, isReady: authReady } = useAuth();
   const activeCustomerId = currentUser?.id ?? "";
   const activeCustomerName = currentUser?.name ?? "";
-  const orders = mergeOrders(localOrders).filter((order) => order.customerId === activeCustomerId);
+  const [orders, setOrders] = React.useState<Order[]>([]);
+  const [customerDisputes, setCustomerDisputes] = React.useState<Dispute[]>([]);
+  const [customerRefundRequests, setCustomerRefundRequests] = React.useState<RefundRequest[]>([]);
+  const [disputesDataReady, setDisputesDataReady] = React.useState(false);
+
+  const refreshDisputesData = React.useCallback(async () => {
+    if (!currentUser) {
+      setOrders([]);
+      setCustomerDisputes([]);
+      setCustomerRefundRequests([]);
+      setDisputesDataReady(true);
+      return;
+    }
+
+    setDisputesDataReady(false);
+    const [realOrders, realDisputes, realRefundRequests] = await Promise.all([
+      getRealOrdersByCustomer(currentUser.id),
+      getRealDisputesForCustomer(currentUser.id),
+      getRealRefundRequestsForCustomer(currentUser.id),
+    ]);
+    setOrders(realOrders);
+    setCustomerDisputes(realDisputes);
+    setCustomerRefundRequests(realRefundRequests);
+    setDisputesDataReady(true);
+  }, [currentUser]);
+
+  React.useEffect(() => {
+    refreshDisputesData();
+  }, [refreshDisputesData]);
+
   const supportTickets = mergeSupportTickets(localSupportTickets);
-  const refundRequests = mergeRefundRequests(localRefundRequests);
-  const disputes = mergeDisputes(localDisputes);
   const reports = mergeMarketplaceReports(localReports).filter(
     (report) => report.reporterCustomerId === activeCustomerId,
   );
   const customerTickets = supportTickets.filter((ticket) => ticket.customerId === activeCustomerId);
-  const customerRefundRequests = refundRequests.filter(
-    (request) => request.customerId === activeCustomerId,
-  );
-  const customerDisputes = disputes.filter((dispute) => dispute.customerId === activeCustomerId);
   const [selectedTicketId, setSelectedTicketId] = React.useState<string | null>(null);
   const [ticketQuery, setTicketQuery] = React.useState("");
   const [disputePhotoPreview, setDisputePhotoPreview] = React.useState("");
@@ -160,16 +180,27 @@ export function SupportCenterClient() {
   });
   const refundForm = useForm<RefundRequestInput>({
     resolver: zodResolver(refundRequestSchema),
-    defaultValues: { orderId: orders[0]?.id ?? "", amount: 5, reason: "" },
+    defaultValues: { orderId: "", amount: 5, reason: "" },
   });
   const disputeForm = useForm<DisputeInput>({
     resolver: zodResolver(disputeSchema),
     defaultValues: {
-      orderId: orders[0]?.id ?? "",
+      orderId: "",
       reason: "",
       requestedResolution: "Refund or replacement",
     },
   });
+
+  React.useEffect(() => {
+    if (orders.length === 0) return;
+
+    if (!refundForm.getValues("orderId")) {
+      refundForm.setValue("orderId", orders[0].id);
+    }
+    if (!disputeForm.getValues("orderId")) {
+      disputeForm.setValue("orderId", orders[0].id);
+    }
+  }, [orders, refundForm, disputeForm]);
   const reportForm = useForm<MarketplaceReportInput>({
     resolver: zodResolver(marketplaceReportSchema),
     defaultValues: {
@@ -285,51 +316,69 @@ export function SupportCenterClient() {
     });
   }
 
-  function submitRefund(input: RefundRequestInput) {
+  async function submitRefund(input: RefundRequestInput) {
     const order = findOrder(input.orderId);
-    if (!order) return;
+    if (!order || !currentUser) return;
 
-    saveRefundRequest(
-      createRefundRequest({
-        orderId: order.id,
-        customerId: order.customerId,
-        storeId: order.storeId,
-        amount: Math.min(input.amount, order.total),
-        currency: order.currency,
-        reason: input.reason,
-      }),
-    );
+    const result = await createRealRefundRequest({
+      orderId: order.id,
+      customerProfileId: currentUser.id,
+      storeId: order.storeId,
+      amount: Math.min(input.amount, order.total),
+      currency: order.currency,
+      reason: input.reason,
+    });
+
+    if (!result.ok) {
+      toast({
+        title: "Could not submit refund request",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
     refundForm.reset({ orderId: order.id, amount: 5, reason: "" });
     toast({
       title: "Refund requested",
-      description: `${order.id} refund request was saved locally.`,
+      description: `Your refund request for ${order.id} was submitted.`,
     });
+    await refreshDisputesData();
   }
 
-  function submitDispute(input: DisputeInput) {
+  async function submitDispute(input: DisputeInput) {
     const order = findOrder(input.orderId);
-    if (!order) return;
+    if (!order || !currentUser) return;
 
-    const dispute = createDispute({
-        orderId: order.id,
-        customerId: order.customerId,
-        storeId: order.storeId,
-        reason: input.reason,
-        requestedResolution: input.requestedResolution,
+    const result = await createRealDispute({
+      orderId: order.id,
+      customerProfileId: currentUser.id,
+      storeId: order.storeId,
+      reason: input.reason,
+      requestedResolution: input.requestedResolution,
+    });
+
+    if (!result.ok) {
+      toast({
+        title: "Could not open dispute",
+        description: result.reason,
+        variant: "destructive",
       });
+      return;
+    }
 
-    saveDispute(
-      disputePhotoPreview
-        ? appendDisputeEvidence(dispute, {
-            authorType: "customer",
-            authorName: activeCustomerName,
-            title: "Customer photo evidence",
-            notes: "Photo attached when the customer opened the dispute.",
-            imagePreviewUrl: disputePhotoPreview,
-            fileName: disputePhotoName,
-          })
-        : dispute,
-    );
+    if (disputePhotoPreview) {
+      await addRealDisputeEvidence(result.dispute.id, {
+        authorType: "customer",
+        authorName: activeCustomerName,
+        title: "Customer photo evidence",
+        notes: "Photo attached when the customer opened the dispute.",
+        imagePreviewUrl: disputePhotoPreview,
+        fileName: disputePhotoName,
+      });
+    }
+
+    await refreshDisputesData();
     disputeForm.reset({
       orderId: order.id,
       reason: "",
@@ -339,7 +388,7 @@ export function SupportCenterClient() {
     setDisputePhotoName("");
     toast({
       title: "Dispute opened",
-      description: `${order.id} dispute was saved locally.`,
+      description: `Your dispute for ${order.id} was submitted.`,
     });
   }
 
@@ -381,7 +430,7 @@ export function SupportCenterClient() {
     });
   }
 
-  if (!isReady || !authReady) {
+  if (!isReady || !authReady || !disputesDataReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 

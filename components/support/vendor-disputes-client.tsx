@@ -25,14 +25,7 @@ import { useVendorScope } from "@/hooks/use-vendor-scope";
 import { toast } from "@/hooks/use-toast";
 import { addAuditLogEntry } from "@/lib/audit-log";
 import { mergeOrders } from "@/lib/orders";
-import {
-  appendDisputeEvidence,
-  appendTicketMessage,
-  getTicketSlaStatus,
-  mergeDisputes,
-  mergeRefundRequests,
-  mergeSupportTickets,
-} from "@/lib/support";
+import { appendTicketMessage, getTicketSlaStatus, mergeSupportTickets } from "@/lib/support";
 import {
   vendorDisputeEvidenceSchema,
   vendorSupportReplySchema,
@@ -40,6 +33,11 @@ import {
   type VendorSupportReplyInput,
 } from "@/lib/schemas";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
+import {
+  addRealDisputeEvidence,
+  getRealDisputesForStore,
+  getRealRefundRequestsForStore,
+} from "@/services/support";
 import type { Dispute, RefundRequest, SupportTicket } from "@/types";
 
 type VendorCaseTab = "tickets" | "disputes";
@@ -75,18 +73,16 @@ function readFileAsDataUrl(file: File) {
 export function VendorDisputesClient() {
   const {
     isReady,
-    localDisputes,
     localOrders,
-    localRefundRequests,
     localSupportTickets,
-    saveDispute,
     saveSupportTicket,
   } = useMarketplaceStorage();
   const { auth, isReady: scopeReady, scopedStores, vendorId } = useVendorScope();
   const orders = mergeOrders(localOrders);
   const tickets = mergeSupportTickets(localSupportTickets);
-  const disputes = mergeDisputes(localDisputes);
-  const refunds = mergeRefundRequests(localRefundRequests);
+  const [vendorDisputes, setVendorDisputes] = React.useState<Dispute[]>([]);
+  const [vendorRefunds, setVendorRefunds] = React.useState<RefundRequest[]>([]);
+  const [disputesDataReady, setDisputesDataReady] = React.useState(false);
   const [tab, setTab] = React.useState<VendorCaseTab>("tickets");
   const [selectedTicketId, setSelectedTicketId] = React.useState<string | null>(null);
   const [selectedDisputeId, setSelectedDisputeId] = React.useState<string | null>(null);
@@ -106,6 +102,29 @@ export function VendorDisputesClient() {
     [scopedStores],
   );
 
+  const refreshDisputesData = React.useCallback(async () => {
+    if (scopedStores.length === 0) {
+      setVendorDisputes([]);
+      setVendorRefunds([]);
+      setDisputesDataReady(true);
+      return;
+    }
+
+    setDisputesDataReady(false);
+    const [disputesByStore, refundsByStore] = await Promise.all([
+      Promise.all(scopedStores.map((store) => getRealDisputesForStore(store.id))),
+      Promise.all(scopedStores.map((store) => getRealRefundRequestsForStore(store.id))),
+    ]);
+    setVendorDisputes(disputesByStore.flat());
+    setVendorRefunds(refundsByStore.flat());
+    setDisputesDataReady(true);
+  }, [scopedStores]);
+
+  React.useEffect(() => {
+    if (!scopeReady) return;
+    refreshDisputesData();
+  }, [scopeReady, refreshDisputesData]);
+
   function ticketStoreId(ticket: SupportTicket) {
     const orderStoreId = orders.find((order) => order.id === ticket.orderId)?.storeId;
     return ticket.storeId ?? orderStoreId;
@@ -118,8 +137,6 @@ export function VendorDisputesClient() {
       (vendorId ? ticket.vendorId === vendorId : false)
     );
   });
-  const vendorDisputes = disputes.filter((dispute) => vendorStoreIds.has(dispute.storeId));
-  const vendorRefunds = refunds.filter((refund) => vendorStoreIds.has(refund.storeId));
   const selectedTicket =
     vendorTickets.find((ticket) => ticket.id === selectedTicketId) ?? vendorTickets[0] ?? null;
   const selectedDispute =
@@ -168,10 +185,10 @@ export function VendorDisputesClient() {
     });
   }
 
-  function addEvidence(values: VendorDisputeEvidenceInput) {
+  async function addEvidence(values: VendorDisputeEvidenceInput) {
     if (!selectedDispute) return;
 
-    const updatedDispute = appendDisputeEvidence(selectedDispute, {
+    const result = await addRealDisputeEvidence(selectedDispute.id, {
       authorType: "vendor",
       authorName: auth.user?.name ?? "",
       title: values.title,
@@ -180,7 +197,16 @@ export function VendorDisputesClient() {
       fileName: evidencePhotoName || undefined,
     });
 
-    saveDispute(updatedDispute);
+    if (!result.ok) {
+      toast({
+        title: "Could not add evidence",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await refreshDisputesData();
     evidenceForm.reset({ title: "", notes: "" });
     setEvidencePhotoPreview("");
     setEvidencePhotoName("");
@@ -220,7 +246,7 @@ export function VendorDisputesClient() {
     setEvidencePhotoName(file.name);
   }
 
-  if (!isReady || !scopeReady) {
+  if (!isReady || !scopeReady || !disputesDataReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 

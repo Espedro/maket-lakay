@@ -145,6 +145,108 @@ export type Database = {
         }
         Relationships: []
       }
+      dispute_evidence: {
+        Row: {
+          author_name: string
+          author_type: string
+          created_at: string
+          dispute_id: string
+          file_name: string | null
+          id: string
+          image_preview_url: string | null
+          notes: string
+          title: string
+        }
+        Insert: {
+          author_name: string
+          author_type: string
+          created_at?: string
+          dispute_id: string
+          file_name?: string | null
+          id?: string
+          image_preview_url?: string | null
+          notes: string
+          title: string
+        }
+        Update: {
+          author_name?: string
+          author_type?: string
+          created_at?: string
+          dispute_id?: string
+          file_name?: string | null
+          id?: string
+          image_preview_url?: string | null
+          notes?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dispute_evidence_dispute_id_fkey"
+            columns: ["dispute_id"]
+            isOneToOne: false
+            referencedRelation: "disputes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      disputes: {
+        Row: {
+          created_at: string
+          customer_profile_id: string
+          id: string
+          order_id: string
+          reason: string
+          requested_resolution: string
+          status: string
+          store_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_profile_id: string
+          id?: string
+          order_id: string
+          reason: string
+          requested_resolution: string
+          status?: string
+          store_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_profile_id?: string
+          id?: string
+          order_id?: string
+          reason?: string
+          requested_resolution?: string
+          status?: string
+          store_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "disputes_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disputes_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disputes_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           id: string
@@ -473,6 +575,67 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      refund_requests: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          customer_profile_id: string
+          id: string
+          order_id: string
+          reason: string
+          status: string
+          store_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string
+          customer_profile_id: string
+          id?: string
+          order_id: string
+          reason: string
+          status?: string
+          store_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          customer_profile_id?: string
+          id?: string
+          order_id?: string
+          reason?: string
+          status?: string
+          store_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refund_requests_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refund_requests_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "refund_requests_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       store_reviews: {
         Row: {

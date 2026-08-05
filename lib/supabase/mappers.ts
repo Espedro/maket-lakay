@@ -3,8 +3,11 @@ import type {
   Category,
   CustomerAddress,
   DeliveryZone,
+  Dispute,
+  DisputeEvidence,
   Order,
   Product,
+  RefundRequest,
   Review,
   Store,
   StoreReview,
@@ -327,5 +330,51 @@ export function toDeliveryZoneRow(zone: DeliveryZone): TablesInsert<"delivery_zo
     currency: zone.currency,
     estimated_days: zone.estimatedDays,
     active: zone.active,
+  };
+}
+
+export function mapRefundRequestRow(row: Tables<"refund_requests">): RefundRequest {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    customerId: row.customer_profile_id,
+    storeId: row.store_id,
+    amount: Number(row.amount),
+    currency: row.currency === "HTG" ? "HTG" : "USD",
+    status: row.status as RefundRequest["status"],
+    reason: row.reason,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? undefined,
+  };
+}
+
+export function mapDisputeEvidenceRow(row: Tables<"dispute_evidence">): DisputeEvidence {
+  return {
+    id: row.id,
+    authorType: row.author_type as DisputeEvidence["authorType"],
+    authorName: row.author_name,
+    title: row.title,
+    notes: row.notes,
+    imagePreviewUrl: row.image_preview_url ?? undefined,
+    fileName: row.file_name ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapDisputeRow(
+  row: Tables<"disputes">,
+  evidenceRows: Tables<"dispute_evidence">[] = [],
+): Dispute {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    customerId: row.customer_profile_id,
+    storeId: row.store_id,
+    status: row.status as Dispute["status"],
+    reason: row.reason,
+    requestedResolution: row.requested_resolution,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? undefined,
+    evidenceRecords: evidenceRows.map(mapDisputeEvidenceRow),
   };
 }
