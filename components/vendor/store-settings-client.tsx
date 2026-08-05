@@ -58,10 +58,10 @@ function slugify(value: string) {
 }
 
 export function StoreSettingsClient() {
-  const { isReady, saveStoreSettings, settings } = useVendorStoreSettings();
   const { defaultStoreId, isReady: scopeReady, scopedStores } = useVendorScope();
   const [storeId, setStoreId] = React.useState(defaultStoreId);
   const selectedStore = scopedStores.find((store) => store.id === storeId) ?? scopedStores[0];
+  const { isReady, saveStoreSettings, settings } = useVendorStoreSettings(storeId, selectedStore);
   const form = useForm<VendorStoreSettingsInput>({
     resolver: zodResolver(vendorStoreSettingsSchema),
     defaultValues: selectedStore ? getDefaultStoreSettings(selectedStore) : undefined,
@@ -74,7 +74,7 @@ export function StoreSettingsClient() {
 
   React.useEffect(() => {
     if (!isReady || !selectedStore) return;
-    form.reset(settings[selectedStore.id] ?? getDefaultStoreSettings(selectedStore));
+    form.reset(settings ?? getDefaultStoreSettings(selectedStore));
   }, [form, isReady, selectedStore, settings]);
 
   React.useEffect(() => {
@@ -93,7 +93,7 @@ export function StoreSettingsClient() {
   }
 
   function submitSettings(values: VendorStoreSettingsInput) {
-    saveStoreSettings(storeId, values);
+    void saveStoreSettings(storeId, values);
   }
 
   if (!isReady || !scopeReady || !selectedStore) {
@@ -272,7 +272,7 @@ export function StoreSettingsClient() {
                       className="object-cover"
                     />
                   ) : (
-                    getStoreAvatarLabel(selectedStore, settings[selectedStore.id])
+                    getStoreAvatarLabel(selectedStore, settings ?? undefined)
                   )}
                 </div>
                 <div className="bg-white px-3 py-2 shadow-sm">

@@ -1,10 +1,5 @@
-import { stores } from "@/data/mock-data";
 import type { VendorStoreSettingsInput } from "@/lib/schemas";
 import type { Store } from "@/types";
-
-export const VENDOR_STORE_SETTINGS_KEY = "maket-lakay-vendor-store-settings";
-
-export type VendorStoreSettingsMap = Record<string, VendorStoreSettingsInput>;
 
 function getStoreInitials(store: Store) {
   return store.logo ?? store.name.split(" ").map((part) => part[0]).join("").slice(0, 2);
@@ -43,15 +38,6 @@ export function getDefaultStoreSettings(store: Store): VendorStoreSettingsInput 
     notifyPromotions: true,
     notifyMarketplaceAnnouncements: false,
   };
-}
-
-export function getDefaultSettingsMap(): VendorStoreSettingsMap {
-  return stores.reduce<VendorStoreSettingsMap>((settings, store) => {
-    settings[store.id] = getDefaultStoreSettings(store);
-    settings[store.id].logoPreview = "";
-    settings[store.id].coverPreview = "";
-    return settings;
-  }, {});
 }
 
 export function getStoreAvatarLabel(store: Store, settings?: VendorStoreSettingsInput) {

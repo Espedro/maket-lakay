@@ -2,75 +2,50 @@
 
 import * as React from "react";
 
-import { stores } from "@/data/mock-data";
 import { toast } from "@/hooks/use-toast";
 import type { VendorStoreSettingsInput } from "@/lib/schemas";
-import {
-  getDefaultSettingsMap,
-  getDefaultStoreSettings,
-  VENDOR_STORE_SETTINGS_KEY,
-  type VendorStoreSettingsMap,
-} from "@/lib/vendor-store-settings";
+import { getDefaultStoreSettings } from "@/lib/vendor-store-settings";
+import { getRealStoreSettings, saveRealStoreSettings } from "@/services/vendors";
+import type { Store } from "@/types";
 
-const STORAGE_EVENT = "maket-lakay-vendor-store-settings-storage";
-
-function readSettings(): VendorStoreSettingsMap {
-  if (typeof window === "undefined") return getDefaultSettingsMap();
-
-  try {
-    const stored = window.localStorage.getItem(VENDOR_STORE_SETTINGS_KEY);
-    const parsed = stored ? (JSON.parse(stored) as VendorStoreSettingsMap) : {};
-
-    return stores.reduce<VendorStoreSettingsMap>((settings, store) => {
-      settings[store.id] = {
-        ...getDefaultStoreSettings(store),
-        ...(parsed[store.id] ?? {}),
-      };
-      return settings;
-    }, {});
-  } catch {
-    return getDefaultSettingsMap();
-  }
-}
-
-function writeSettings(settings: VendorStoreSettingsMap) {
-  window.localStorage.setItem(VENDOR_STORE_SETTINGS_KEY, JSON.stringify(settings));
-  window.dispatchEvent(new Event(STORAGE_EVENT));
-}
-
-export function useVendorStoreSettings() {
-  const [settings, setSettings] = React.useState<VendorStoreSettingsMap>(getDefaultSettingsMap);
+export function useVendorStoreSettings(storeId: string, store: Store | undefined) {
+  const [settings, setSettings] = React.useState<VendorStoreSettingsInput | null>(null);
   const [isReady, setIsReady] = React.useState(false);
 
-  const refresh = React.useCallback(() => {
-    setSettings(readSettings());
+  const refresh = React.useCallback(async () => {
+    if (!storeId || !store) {
+      setSettings(null);
+      setIsReady(true);
+      return;
+    }
+
+    setIsReady(false);
+    const real = await getRealStoreSettings(storeId);
+    setSettings(real ?? getDefaultStoreSettings(store));
     setIsReady(true);
-  }, []);
+  }, [storeId, store]);
 
   React.useEffect(() => {
     refresh();
-    window.addEventListener("storage", refresh);
-    window.addEventListener(STORAGE_EVENT, refresh);
-
-    return () => {
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener(STORAGE_EVENT, refresh);
-    };
   }, [refresh]);
 
   const saveStoreSettings = React.useCallback(
-    (storeId: string, values: VendorStoreSettingsInput) => {
-      const currentSettings = readSettings();
-      const nextSettings = {
-        ...currentSettings,
-        [storeId]: values,
-      };
+    async (id: string, values: VendorStoreSettingsInput) => {
+      const result = await saveRealStoreSettings(id, values);
 
-      writeSettings(nextSettings);
-      setSettings(nextSettings);
+      if (!result.ok) {
+        toast({
+          title: "Could not save store settings",
+          description: result.reason,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setSettings(values);
       toast({
         title: "Store settings saved",
-        description: `${values.storeName} was updated in localStorage.`,
+        description: `${values.storeName} was updated.`,
       });
     },
     [],

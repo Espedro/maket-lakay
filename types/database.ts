@@ -537,6 +537,7 @@ export type Database = {
           product_count: number
           rating: number
           review_count: number
+          settings: Json
           slug: string
           vendor_id: string
           verified: boolean
@@ -552,6 +553,7 @@ export type Database = {
           product_count?: number
           rating?: number
           review_count?: number
+          settings?: Json
           slug: string
           vendor_id: string
           verified?: boolean
@@ -567,6 +569,7 @@ export type Database = {
           product_count?: number
           rating?: number
           review_count?: number
+          settings?: Json
           slug?: string
           vendor_id?: string
           verified?: boolean

@@ -1,7 +1,10 @@
 import { orders, stores as mockStores } from "@/data/mock-data";
+import type { VendorStoreSettingsInput } from "@/lib/schemas";
+import { createClient } from "@/lib/supabase/client";
 import { mapStoreRow, mapVendorRow } from "@/lib/supabase/mappers";
 import { createPublicClient } from "@/lib/supabase/public";
 import { getProductsByStore } from "@/services/products";
+import type { Json } from "@/types/database";
 
 export async function getVendors() {
   const supabase = createPublicClient();
@@ -93,4 +96,33 @@ export async function getPopularStores(limit = 6) {
   return [...stores]
     .sort((a, b) => b.rating - a.rating || b.productCount - a.productCount)
     .slice(0, limit);
+}
+
+export async function getRealStoreSettings(storeId: string): Promise<VendorStoreSettingsInput | null> {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("stores")
+    .select("settings")
+    .eq("id", storeId)
+    .maybeSingle();
+
+  if (error || !data || !data.settings || Object.keys(data.settings).length === 0) {
+    return null;
+  }
+
+  return data.settings as unknown as VendorStoreSettingsInput;
+}
+
+export async function saveRealStoreSettings(storeId: string, settings: VendorStoreSettingsInput) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("stores")
+    .update({ settings: settings as unknown as Json, name: settings.storeName, slug: settings.storeSlug })
+    .eq("id", storeId);
+
+  if (error) {
+    return { ok: false as const, reason: error.message };
+  }
+
+  return { ok: true as const };
 }
