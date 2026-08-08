@@ -29,18 +29,22 @@ import {
   getReportTargetLabel,
   getSlaDueAt,
   getTicketSlaStatus,
-  mergeDisputes,
   mergeMarketplaceReports,
-  mergeRefundRequests,
   mergeSupportTickets,
-  updateRefundRequestStatus,
   updateReportStatus,
   updateTicketPriority,
   updateTicketStatus,
 } from "@/lib/support";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import {
+  getAllRealDisputes,
+  getAllRealRefundRequests,
+  updateRealDisputeStatus,
+  updateRealRefundRequestStatus,
+} from "@/services/support";
 import type {
   Dispute,
+  RefundRequest,
   SupportTicket,
   SupportTicketPriority,
   SupportTicketStatus,
@@ -102,22 +106,19 @@ function getTicketSlaDueAt(ticket: SupportTicket) {
 export function SupportWorkbenchClient() {
   const {
     isReady,
-    localDisputes,
     localOrders,
-    localRefundRequests,
     localReports,
     localSupportTickets,
     saveCustomerNotification,
-    saveDispute,
     saveMarketplaceReport,
-    saveRefundRequest,
     saveSupportTicket,
   } = useMarketplaceStorage();
   const orders = mergeOrders(localOrders);
   const tickets = mergeSupportTickets(localSupportTickets);
-  const refunds = mergeRefundRequests(localRefundRequests);
-  const disputes = mergeDisputes(localDisputes);
   const reports = mergeMarketplaceReports(localReports);
+  const [disputes, setDisputes] = React.useState<Dispute[]>([]);
+  const [refunds, setRefunds] = React.useState<RefundRequest[]>([]);
+  const [disputesDataReady, setDisputesDataReady] = React.useState(false);
   const [selectedTicketId, setSelectedTicketId] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<QueueFilter>("all");
@@ -168,6 +169,21 @@ export function SupportWorkbenchClient() {
       setSelectedTicketId(tickets[0].id);
     }
   }, [selectedTicketId, tickets]);
+
+  const refreshDisputesData = React.useCallback(async () => {
+    setDisputesDataReady(false);
+    const [realDisputes, realRefunds] = await Promise.all([
+      getAllRealDisputes(),
+      getAllRealRefundRequests(),
+    ]);
+    setDisputes(realDisputes);
+    setRefunds(realRefunds);
+    setDisputesDataReady(true);
+  }, []);
+
+  React.useEffect(() => {
+    refreshDisputesData();
+  }, [refreshDisputesData]);
 
   function saveTicket(ticket: SupportTicket, title: string, description: string) {
     saveSupportTicket(ticket);
@@ -300,11 +316,22 @@ export function SupportWorkbenchClient() {
     });
   }
 
-  function approveRefund(refundId: string) {
+  async function approveRefund(refundId: string) {
     const request = refunds.find((item) => item.id === refundId);
 
     if (!request) return;
-    saveRefundRequest(updateRefundRequestStatus(request, "approved"));
+
+    const result = await updateRealRefundRequestStatus(request.id, "approved");
+
+    if (!result.ok) {
+      toast({
+        title: "Could not approve refund",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
     saveCustomerNotification(
       createSupportCustomerNotification({
         customerId: request.customerId,
@@ -327,14 +354,21 @@ export function SupportWorkbenchClient() {
       severity: "critical",
     });
     toast({ title: "Refund approved", description: `${request.id} is ready for processing.` });
+    await refreshDisputesData();
   }
 
-  function resolveDispute(dispute: Dispute) {
-    saveDispute({
-      ...dispute,
-      status: "resolved",
-      updatedAt: new Date().toISOString(),
-    });
+  async function resolveDispute(dispute: Dispute) {
+    const result = await updateRealDisputeStatus(dispute.id, "resolved");
+
+    if (!result.ok) {
+      toast({
+        title: "Could not resolve dispute",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
     saveCustomerNotification(
       createSupportCustomerNotification({
         customerId: dispute.customerId,
@@ -356,7 +390,8 @@ export function SupportWorkbenchClient() {
       newValue: "resolved",
       severity: "warning",
     });
-    toast({ title: "Dispute resolved", description: `${dispute.id} was updated locally.` });
+    toast({ title: "Dispute resolved", description: `${dispute.id} was updated.` });
+    await refreshDisputesData();
   }
 
   function actionReport(reportId: string) {
@@ -380,7 +415,7 @@ export function SupportWorkbenchClient() {
     toast({ title: "Report action recorded", description: `${report.id} was updated locally.` });
   }
 
-  if (!isReady) {
+  if (!isReady || !disputesDataReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 

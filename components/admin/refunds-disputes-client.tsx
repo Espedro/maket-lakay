@@ -26,21 +26,19 @@ import { ResponsiveDataView } from "@/components/ui/responsive-data-view";
 import { customers, paymentRecords, stores } from "@/data/mock-data";
 import { toast } from "@/hooks/use-toast";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
-import {
-  getReportTargetLabel,
-  mergeDisputes,
-  mergeMarketplaceReports,
-  mergeRefundRequests,
-  updateRefundRequestStatus,
-  updateReportStatus,
-} from "@/lib/support";
+import { getReportTargetLabel, mergeMarketplaceReports, updateReportStatus } from "@/lib/support";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import {
+  getAllRealDisputes,
+  getAllRealRefundRequests,
+  updateRealDisputeStatus,
+  updateRealRefundRequestStatus,
+} from "@/services/support";
 import type {
   CustomerNotification,
   Dispute,
   MarketplaceReport,
   PaymentRecord,
-  RefundRecord,
   RefundRequest,
   RefundStatus,
 } from "@/types";
@@ -78,23 +76,35 @@ function statusVariant(status: string) {
 export function RefundsDisputesClient() {
   const {
     isReady,
-    localDisputes,
     localPaymentRecords,
-    localRefundRequests,
     localReports,
     saveCustomerNotification,
-    saveDispute,
     saveMarketplaceReport,
     saveRefundRecord,
-    saveRefundRequest,
   } = useMarketplaceStorage();
   const [query, setQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [selectedDispute, setSelectedDispute] = React.useState<Dispute | null>(null);
   const [pendingAction, setPendingAction] = React.useState<ResolutionAction | null>(null);
-  const refunds = mergeRefundRequests(localRefundRequests);
-  const disputes = mergeDisputes(localDisputes);
+  const [disputes, setDisputes] = React.useState<Dispute[]>([]);
+  const [refunds, setRefunds] = React.useState<RefundRequest[]>([]);
+  const [disputesDataReady, setDisputesDataReady] = React.useState(false);
   const reports = mergeMarketplaceReports(localReports);
+
+  const refreshDisputesData = React.useCallback(async () => {
+    setDisputesDataReady(false);
+    const [realDisputes, realRefunds] = await Promise.all([
+      getAllRealDisputes(),
+      getAllRealRefundRequests(),
+    ]);
+    setDisputes(realDisputes);
+    setRefunds(realRefunds);
+    setDisputesDataReady(true);
+  }, []);
+
+  React.useEffect(() => {
+    refreshDisputesData();
+  }, [refreshDisputesData]);
 
   function saveResolutionNotification(notification: Omit<CustomerNotification, "id" | "createdAt" | "read">) {
     saveCustomerNotification({
@@ -117,11 +127,27 @@ export function RefundsDisputesClient() {
     return matchesQuery && matchesStatus;
   });
 
-  function createRefundFromDispute(dispute: Dispute) {
+  async function createRefundFromDispute(dispute: Dispute) {
     const matchingRefund = refunds.find((refund) => refund.orderId === dispute.orderId);
     const amount = matchingRefund?.amount ?? 10;
     const currency = matchingRefund?.currency ?? "USD";
-    const refundRecord: RefundRecord = {
+
+    const result = await updateRealDisputeStatus(dispute.id, "resolved");
+
+    if (!result.ok) {
+      toast({
+        title: "Could not resolve dispute",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (matchingRefund) {
+      await updateRealRefundRequestStatus(matchingRefund.id, "approved");
+    }
+
+    saveRefundRecord({
       id: `refund-dispute-${Date.now()}`,
       paymentId: getPaymentId(dispute.orderId, localPaymentRecords),
       orderId: dispute.orderId,
@@ -131,36 +157,40 @@ export function RefundsDisputesClient() {
       status: "processed",
       reason: `Dispute refund approved: ${dispute.reason}`,
       createdAt: new Date().toISOString(),
-    };
-
-    saveRefundRecord(refundRecord);
-    saveDispute({
-      ...dispute,
-      status: "resolved",
-      updatedAt: new Date().toISOString(),
     });
     saveResolutionNotification({
       customerId: dispute.customerId,
       orderId: dispute.orderId,
       channel: "in_app",
       title: "Refund approved",
-      message: `${dispute.orderId}: a simulated refund was approved from dispute review.`,
+      message: `${dispute.orderId}: a refund was approved from dispute review.`,
     });
     toast({
       title: "Refund approved",
-      description: `${formatCurrency(amount, currency)} simulated refund recorded for ${dispute.orderId}.`,
+      description: `${formatCurrency(amount, currency)} refund recorded for ${dispute.orderId}.`,
     });
+    await refreshDisputesData();
   }
 
-  function confirmAction() {
+  async function confirmAction() {
     if (!pendingAction) return;
 
     if (pendingAction.type === "refund-status") {
-      const nextRequest = updateRefundRequestStatus(
-        pendingAction.request,
+      const result = await updateRealRefundRequestStatus(
+        pendingAction.request.id,
         pendingAction.status,
       );
-      saveRefundRequest(nextRequest);
+
+      if (!result.ok) {
+        toast({
+          title: "Could not update refund request",
+          description: result.reason,
+          variant: "destructive",
+        });
+        setPendingAction(null);
+        return;
+      }
+
       if (pendingAction.status === "approved" || pendingAction.status === "processed") {
         saveRefundRecord({
           id: `refund-request-${Date.now()}`,
@@ -186,16 +216,24 @@ export function RefundsDisputesClient() {
       });
       toast({
         title: pendingAction.status === "approved" ? "Refund approved" : "Refund rejected",
-        description: `${pendingAction.request.id} was updated locally.`,
+        description: `${pendingAction.request.id} was updated.`,
       });
+      await refreshDisputesData();
     }
 
     if (pendingAction.type === "dispute-close") {
-      saveDispute({
-        ...pendingAction.dispute,
-        status: "closed",
-        updatedAt: new Date().toISOString(),
-      });
+      const result = await updateRealDisputeStatus(pendingAction.dispute.id, "closed");
+
+      if (!result.ok) {
+        toast({
+          title: "Could not close dispute",
+          description: result.reason,
+          variant: "destructive",
+        });
+        setPendingAction(null);
+        return;
+      }
+
       saveResolutionNotification({
         customerId: pendingAction.dispute.customerId,
         orderId: pendingAction.dispute.orderId,
@@ -203,15 +241,23 @@ export function RefundsDisputesClient() {
         title: "Dispute closed",
         message: `${pendingAction.dispute.orderId}: admin closed your dispute after review.`,
       });
-      toast({ title: "Dispute closed", description: `${pendingAction.dispute.id} was closed locally.` });
+      toast({ title: "Dispute closed", description: `${pendingAction.dispute.id} was closed.` });
+      await refreshDisputesData();
     }
 
     if (pendingAction.type === "dispute-info") {
-      saveDispute({
-        ...pendingAction.dispute,
-        status: "under_review",
-        updatedAt: new Date().toISOString(),
-      });
+      const result = await updateRealDisputeStatus(pendingAction.dispute.id, "under_review");
+
+      if (!result.ok) {
+        toast({
+          title: "Could not update dispute",
+          description: result.reason,
+          variant: "destructive",
+        });
+        setPendingAction(null);
+        return;
+      }
+
       saveResolutionNotification({
         customerId: pendingAction.dispute.customerId,
         orderId: pendingAction.dispute.orderId,
@@ -223,10 +269,11 @@ export function RefundsDisputesClient() {
         title: "Information requested",
         description: `${pendingAction.dispute.id} is now under review.`,
       });
+      await refreshDisputesData();
     }
 
     if (pendingAction.type === "dispute-refund") {
-      createRefundFromDispute(pendingAction.dispute);
+      await createRefundFromDispute(pendingAction.dispute);
     }
 
     if (pendingAction.type === "report") {
@@ -278,7 +325,7 @@ export function RefundsDisputesClient() {
     );
   }
 
-  if (!isReady) {
+  if (!isReady || !disputesDataReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 
@@ -531,9 +578,7 @@ export function RefundsDisputesClient() {
         <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>Evidence preview</DialogTitle>
-            <DialogDescription>
-              Evidence summary for admin resolution. No files are uploaded.
-            </DialogDescription>
+            <DialogDescription>Evidence submitted by the customer and vendor for admin resolution.</DialogDescription>
           </DialogHeader>
           {selectedDispute ? (
             <div className="space-y-3">
@@ -544,6 +589,36 @@ export function RefundsDisputesClient() {
               <EvidenceItem label="Customer statement" value={selectedDispute.reason} />
               <EvidenceItem label="Requested resolution" value={selectedDispute.requestedResolution} />
               <EvidenceItem label="Order reference" value={selectedDispute.orderId} />
+              {(selectedDispute.evidenceRecords ?? []).length ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                    Evidence records
+                  </p>
+                  {selectedDispute.evidenceRecords?.map((evidence) => (
+                    <div key={evidence.id} className="border p-3 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-black">
+                          {evidence.title} <span className="text-muted-foreground">- {evidence.authorType}</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground">{formatDate(evidence.createdAt)}</p>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">{evidence.notes}</p>
+                      {evidence.imagePreviewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={evidence.imagePreviewUrl}
+                          alt={evidence.title}
+                          className="mt-2 max-h-56 w-full border object-cover"
+                        />
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="border bg-muted/30 p-3 text-sm text-muted-foreground">
+                  No evidence has been submitted for this dispute yet.
+                </p>
+              )}
             </div>
           ) : null}
         </DialogContent>
@@ -553,7 +628,11 @@ export function RefundsDisputesClient() {
         <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>Confirm resolution action</DialogTitle>
-            <DialogDescription>This updates local support state only.</DialogDescription>
+            <DialogDescription>
+              {pendingAction?.type === "report"
+                ? "This updates local support state only."
+                : "This updates the real dispute or refund request record."}
+            </DialogDescription>
           </DialogHeader>
           <div className="border bg-muted/30 p-4 text-sm">
             {pendingAction?.type === "refund-status"
@@ -561,7 +640,7 @@ export function RefundsDisputesClient() {
               : pendingAction?.type === "report"
                 ? `Set report ${pendingAction.report.id} to ${pendingAction.status.replaceAll("_", " ")}?`
                 : pendingAction?.type === "dispute-refund"
-                  ? `Approve a simulated refund for ${pendingAction.dispute.id}?`
+                  ? `Approve a refund for ${pendingAction.dispute.id}? This also marks the linked refund request approved and records a local refund entry.`
                   : pendingAction?.type === "dispute-info"
                     ? `Request additional information for ${pendingAction.dispute.id}?`
                     : `Close ${pendingAction?.dispute.id}?`}

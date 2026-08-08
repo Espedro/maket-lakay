@@ -151,3 +151,61 @@ export async function createRealRefundRequest(input: {
 
   return { ok: true as const };
 }
+
+/** Admin-only (RLS). Relies on the admin RLS bypass to see every dispute. */
+export async function getAllRealDisputes(): Promise<Dispute[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("disputes")
+    .select("*, dispute_evidence(*)")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return (data as DisputeRowWithEvidence[]).map((row) => mapDisputeRow(row, row.dispute_evidence));
+}
+
+/** Admin-only (RLS). Relies on the admin RLS bypass to see every refund request. */
+export async function getAllRealRefundRequests(): Promise<RefundRequest[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("refund_requests")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data.map(mapRefundRequestRow);
+}
+
+export async function updateRealDisputeStatus(disputeId: string, status: Dispute["status"]) {
+  const supabase = createClient();
+  const { error } = await supabase.from("disputes").update({ status }).eq("id", disputeId);
+
+  if (error) {
+    return { ok: false as const, reason: error.message };
+  }
+
+  return { ok: true as const };
+}
+
+export async function updateRealRefundRequestStatus(
+  requestId: string,
+  status: RefundRequest["status"],
+) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("refund_requests")
+    .update({ status })
+    .eq("id", requestId);
+
+  if (error) {
+    return { ok: false as const, reason: error.message };
+  }
+
+  return { ok: true as const };
+}
