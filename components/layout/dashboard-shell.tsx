@@ -22,14 +22,11 @@ import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import { useVendorScope } from "@/hooks/use-vendor-scope";
 import { getRoleHomeHref, getRoleLabel, type AppRole } from "@/lib/auth-roles";
 import { mergeOrders } from "@/lib/orders";
-import {
-  mergeDisputes,
-  mergeMarketplaceReports,
-  mergeRefundRequests,
-  mergeSupportTickets,
-} from "@/lib/support";
+import { mergeDisputes, mergeMarketplaceReports, mergeRefundRequests } from "@/lib/support";
 import { cn } from "@/lib/utils";
 import { getPayoutRequestStoreId } from "@/lib/vendor-commerce";
+import { getAllRealTickets } from "@/services/support";
+import type { SupportTicket } from "@/types";
 
 interface DashboardNavItem {
   label: string;
@@ -61,17 +58,21 @@ export function DashboardShell({
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
   }, [isReady, user, router, pathname]);
-  const {
-    localDisputes,
-    localOrders,
-    localRefundRequests,
-    localReports,
-    localSupportTickets,
-  } = useMarketplaceStorage();
+  const { localDisputes, localOrders, localRefundRequests, localReports } = useMarketplaceStorage();
   const { payoutRequests } = useAdminPayoutRequests();
   const { scopedStoreIds } = useVendorScope();
   const [open, setOpen] = React.useState(false);
-  const tickets = mergeSupportTickets(localSupportTickets);
+  const [tickets, setTickets] = React.useState<SupportTicket[]>([]);
+
+  React.useEffect(() => {
+    if (!user) {
+      setTickets([]);
+      return;
+    }
+
+    getAllRealTickets().then(setTickets);
+  }, [user]);
+
   const refunds = mergeRefundRequests(localRefundRequests);
   const disputes = mergeDisputes(localDisputes);
   const reports = mergeMarketplaceReports(localReports);

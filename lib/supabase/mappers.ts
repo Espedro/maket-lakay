@@ -11,6 +11,8 @@ import type {
   Review,
   Store,
   StoreReview,
+  SupportMessage,
+  SupportTicket,
   Vendor,
 } from "@/types";
 import type { ManagedProduct } from "@/lib/vendor-products";
@@ -376,5 +378,47 @@ export function mapDisputeRow(
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? undefined,
     evidenceRecords: evidenceRows.map(mapDisputeEvidenceRow),
+  };
+}
+
+export function mapSupportTicketMessageRow(row: Tables<"support_ticket_messages">): SupportMessage {
+  return {
+    id: row.id,
+    authorType: row.author_type as SupportMessage["authorType"],
+    authorName: row.author_name,
+    body: row.body,
+    createdAt: row.created_at,
+    visibility: row.visibility as SupportMessage["visibility"],
+  };
+}
+
+export function mapSupportTicketRow(
+  row: Tables<"support_tickets">,
+  messageRows: Tables<"support_ticket_messages">[] = [],
+): SupportTicket {
+  return {
+    id: row.id,
+    customerId: row.customer_profile_id,
+    orderId: row.order_id ?? undefined,
+    storeId: row.store_id ?? undefined,
+    assignedTo: row.assigned_to ?? undefined,
+    assignedToName: row.assigned_to_name ?? undefined,
+    slaDueAt: row.sla_due_at ?? undefined,
+    escalationStatus: (row.escalation_status ?? undefined) as SupportTicket["escalationStatus"],
+    escalatedAt: row.escalated_at ?? undefined,
+    escalatedByName: row.escalated_by_name ?? undefined,
+    escalationReason: row.escalation_reason ?? undefined,
+    adminResolution: row.admin_resolution ?? undefined,
+    adminResolvedAt: row.admin_resolved_at ?? undefined,
+    subject: row.subject,
+    category: row.category as SupportTicket["category"],
+    priority: row.priority as SupportTicket["priority"],
+    status: row.status as SupportTicket["status"],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    messages: messageRows
+      .slice()
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .map(mapSupportTicketMessageRow),
   };
 }

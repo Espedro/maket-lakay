@@ -22,25 +22,22 @@ import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import { addAuditLogEntry } from "@/lib/audit-log";
 import { mergeOrders } from "@/lib/orders";
 import {
-  appendTicketMessage,
-  assignSupportTicket,
   createSupportCustomerNotification,
-  escalateSupportTicket,
   getReportTargetLabel,
   getSlaDueAt,
   getTicketSlaStatus,
   mergeMarketplaceReports,
-  mergeSupportTickets,
   updateReportStatus,
-  updateTicketPriority,
-  updateTicketStatus,
 } from "@/lib/support";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
+  addRealSupportTicketMessage,
   getAllRealDisputes,
   getAllRealRefundRequests,
+  getAllRealTickets,
   updateRealDisputeStatus,
   updateRealRefundRequestStatus,
+  updateRealSupportTicket,
 } from "@/services/support";
 import type {
   Dispute,
@@ -108,16 +105,14 @@ export function SupportWorkbenchClient() {
     isReady,
     localOrders,
     localReports,
-    localSupportTickets,
     saveCustomerNotification,
     saveMarketplaceReport,
-    saveSupportTicket,
   } = useMarketplaceStorage();
   const orders = mergeOrders(localOrders);
-  const tickets = mergeSupportTickets(localSupportTickets);
   const reports = mergeMarketplaceReports(localReports);
   const [disputes, setDisputes] = React.useState<Dispute[]>([]);
   const [refunds, setRefunds] = React.useState<RefundRequest[]>([]);
+  const [tickets, setTickets] = React.useState<SupportTicket[]>([]);
   const [disputesDataReady, setDisputesDataReady] = React.useState(false);
   const [selectedTicketId, setSelectedTicketId] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
@@ -172,12 +167,14 @@ export function SupportWorkbenchClient() {
 
   const refreshDisputesData = React.useCallback(async () => {
     setDisputesDataReady(false);
-    const [realDisputes, realRefunds] = await Promise.all([
+    const [realDisputes, realRefunds, realTickets] = await Promise.all([
       getAllRealDisputes(),
       getAllRealRefundRequests(),
+      getAllRealTickets(),
     ]);
     setDisputes(realDisputes);
     setRefunds(realRefunds);
+    setTickets(realTickets);
     setDisputesDataReady(true);
   }, []);
 
@@ -185,21 +182,28 @@ export function SupportWorkbenchClient() {
     refreshDisputesData();
   }, [refreshDisputesData]);
 
-  function saveTicket(ticket: SupportTicket, title: string, description: string) {
-    saveSupportTicket(ticket);
-    setSelectedTicketId(ticket.id);
-    toast({ title, description });
-  }
-
-  function assignTicket(ticket: SupportTicket, agentId: string) {
+  async function assignTicket(ticket: SupportTicket, agentId: string) {
     const agent = supportAgents.find((item) => item.id === agentId);
     if (!agent) return;
 
-    saveTicket(
-      assignSupportTicket(ticket, { assignedTo: agent.id, assignedToName: agent.name }),
-      "Ticket assigned",
-      `${ticket.id} assigned to ${agent.name}.`,
-    );
+    const result = await updateRealSupportTicket(ticket.id, {
+      assignedTo: agent.id,
+      assignedToName: agent.name,
+    });
+
+    if (!result.ok) {
+      toast({ title: "Could not assign ticket", description: result.reason, variant: "destructive" });
+      return;
+    }
+
+    await addRealSupportTicketMessage(ticket.id, {
+      authorType: "support",
+      authorName: "Maket Lakay Support",
+      body: `Ticket assigned to ${agent.name}.`,
+    });
+
+    setSelectedTicketId(ticket.id);
+    toast({ title: "Ticket assigned", description: `${ticket.id} assigned to ${agent.name}.` });
     addAuditLogEntry({
       actorId: "support-roseline",
       actorName: "Roseline Admin",
@@ -213,14 +217,28 @@ export function SupportWorkbenchClient() {
       newValue: agent.name,
       severity: "info",
     });
+    await refreshDisputesData();
   }
 
-  function changePriority(ticket: SupportTicket, priority: SupportTicketPriority) {
-    saveTicket(
-      updateTicketPriority(ticket, priority),
-      "Priority updated",
-      `${ticket.id} priority changed to ${priority}.`,
-    );
+  async function changePriority(ticket: SupportTicket, priority: SupportTicketPriority) {
+    const result = await updateRealSupportTicket(ticket.id, {
+      priority,
+      slaDueAt: getSlaDueAt(priority, ticket.createdAt),
+    });
+
+    if (!result.ok) {
+      toast({ title: "Could not update priority", description: result.reason, variant: "destructive" });
+      return;
+    }
+
+    await addRealSupportTicketMessage(ticket.id, {
+      authorType: "support",
+      authorName: "Maket Lakay Support",
+      body: `Priority changed to ${priority}.`,
+    });
+
+    setSelectedTicketId(ticket.id);
+    toast({ title: "Priority updated", description: `${ticket.id} priority changed to ${priority}.` });
     addAuditLogEntry({
       actorId: "support-roseline",
       actorName: "Roseline Admin",
@@ -234,14 +252,31 @@ export function SupportWorkbenchClient() {
       newValue: priority,
       severity: priority === "urgent" || priority === "high" ? "warning" : "info",
     });
+    await refreshDisputesData();
   }
 
-  function changeStatus(ticket: SupportTicket, status: SupportTicketStatus) {
-    saveTicket(
-      updateTicketStatus(ticket, status),
-      "Ticket status updated",
-      `${ticket.id} is now ${status.replaceAll("_", " ")}.`,
-    );
+  async function changeStatus(ticket: SupportTicket, status: SupportTicketStatus) {
+    const result = await updateRealSupportTicket(ticket.id, {
+      status,
+      slaDueAt: ticket.slaDueAt ?? getSlaDueAt(ticket.priority, ticket.createdAt),
+    });
+
+    if (!result.ok) {
+      toast({ title: "Could not update status", description: result.reason, variant: "destructive" });
+      return;
+    }
+
+    await addRealSupportTicketMessage(ticket.id, {
+      authorType: "support",
+      authorName: "Maket Lakay Support",
+      body: `Status changed to ${status.replaceAll("_", " ")}.`,
+    });
+
+    setSelectedTicketId(ticket.id);
+    toast({
+      title: "Ticket status updated",
+      description: `${ticket.id} is now ${status.replaceAll("_", " ")}.`,
+    });
     addAuditLogEntry({
       actorId: "support-roseline",
       actorName: "Roseline Admin",
@@ -255,22 +290,30 @@ export function SupportWorkbenchClient() {
       newValue: status,
       severity: status === "resolved" ? "info" : "warning",
     });
+    await refreshDisputesData();
   }
 
-  function sendReply(ticket: SupportTicket) {
+  async function sendReply(ticket: SupportTicket) {
     const body = reply.trim();
     if (!body) return;
 
-    saveTicket(
-      appendTicketMessage(ticket, {
-        authorType: "support",
-        authorName: selectedTicket?.assignedToName ?? "Maket Lakay Support",
-        body,
-        visibility: replyVisibility,
-      }),
-      replyVisibility === "internal" ? "Internal note added" : "Reply added",
-      `${ticket.id} conversation was updated locally.`,
-    );
+    const result = await addRealSupportTicketMessage(ticket.id, {
+      authorType: "support",
+      authorName: selectedTicket?.assignedToName ?? "Maket Lakay Support",
+      body,
+      visibility: replyVisibility,
+    });
+
+    if (!result.ok) {
+      toast({ title: "Could not send reply", description: result.reason, variant: "destructive" });
+      return;
+    }
+
+    setSelectedTicketId(ticket.id);
+    toast({
+      title: replyVisibility === "internal" ? "Internal note added" : "Reply added",
+      description: `${ticket.id} conversation was updated.`,
+    });
     addAuditLogEntry({
       actorId: "support-roseline",
       actorName: selectedTicket?.assignedToName ?? "Roseline Admin",
@@ -290,17 +333,37 @@ export function SupportWorkbenchClient() {
       severity: "info",
     });
     setReply("");
+    await refreshDisputesData();
   }
 
-  function escalateTicket(ticket: SupportTicket) {
+  async function escalateTicket(ticket: SupportTicket) {
     const reason =
       "Escalated to admin review. Support should not take final action until an admin confirms the next step.";
-    const escalatedTicket = escalateSupportTicket(ticket, {
+    const now = new Date().toISOString();
+
+    const result = await updateRealSupportTicket(ticket.id, {
+      priority: "urgent",
+      slaDueAt: getSlaDueAt("urgent", now),
+      escalationStatus: "pending_admin",
+      escalatedAt: now,
       escalatedByName: selectedTicket?.assignedToName ?? "Maket Lakay Support",
-      reason,
+      escalationReason: reason,
     });
 
-    saveTicket(escalatedTicket, "Ticket escalated", `${ticket.id} was escalated to admin review.`);
+    if (!result.ok) {
+      toast({ title: "Could not escalate ticket", description: result.reason, variant: "destructive" });
+      return;
+    }
+
+    await addRealSupportTicketMessage(ticket.id, {
+      authorType: "support",
+      authorName: selectedTicket?.assignedToName ?? "Maket Lakay Support",
+      body: reason,
+      visibility: "internal",
+    });
+
+    setSelectedTicketId(ticket.id);
+    toast({ title: "Ticket escalated", description: `${ticket.id} was escalated to admin review.` });
     addAuditLogEntry({
       actorId: "support-roseline",
       actorName: selectedTicket?.assignedToName ?? "Roseline Admin",
@@ -314,6 +377,7 @@ export function SupportWorkbenchClient() {
       newValue: "urgent",
       severity: "critical",
     });
+    await refreshDisputesData();
   }
 
   async function approveRefund(refundId: string) {

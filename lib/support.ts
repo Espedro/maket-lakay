@@ -6,7 +6,6 @@ import {
   reviews,
   storeReviews,
   stores,
-  supportTickets,
 } from "@/data/mock-data";
 import type {
   CurrencyCode,
@@ -19,16 +18,12 @@ import type {
   ReportStatus,
   Review,
   StoreReview,
-  SupportMessage,
-  SupportEscalationStatus,
   SupportTicket,
   SupportTicketPriority,
-  SupportTicketStatus,
 } from "@/types";
 
 export const LOCAL_REVIEWS_KEY = "maket-lakay-reviews";
 export const LOCAL_STORE_REVIEWS_KEY = "maket-lakay-store-reviews";
-export const LOCAL_SUPPORT_TICKETS_KEY = "maket-lakay-support-tickets";
 export const LOCAL_REFUND_REQUESTS_KEY = "maket-lakay-refund-requests";
 export const LOCAL_DISPUTES_KEY = "maket-lakay-disputes";
 export const LOCAL_REPORTS_KEY = "maket-lakay-marketplace-reports";
@@ -79,10 +74,6 @@ export function mergeStoreReviews(localReviews: StoreReview[] = []) {
   return mergeById(storeReviews, localReviews);
 }
 
-export function mergeSupportTickets(localTickets: SupportTicket[] = []) {
-  return mergeById(supportTickets, localTickets);
-}
-
 export function mergeRefundRequests(localRequests: RefundRequest[] = []) {
   return mergeById(refundRequests, localRequests);
 }
@@ -118,127 +109,6 @@ export function getTicketSlaStatus(ticket: SupportTicket) {
   if (now > dueTime) return "breached";
   if (now >= warningTime) return "at_risk";
   return "on_track";
-}
-
-export function appendTicketMessage(
-  ticket: SupportTicket,
-  input: {
-    authorType: SupportMessage["authorType"];
-    authorName: string;
-    body: string;
-    visibility?: SupportMessage["visibility"];
-  },
-): SupportTicket {
-  const now = new Date().toISOString();
-
-  return {
-    ...ticket,
-    updatedAt: now,
-    messages: [
-      ...ticket.messages,
-      {
-        id: `ticket-message-${Date.now()}`,
-        authorType: input.authorType,
-        authorName: input.authorName,
-        body: input.body,
-        createdAt: now,
-        visibility: input.visibility ?? "customer_visible",
-      },
-    ],
-  };
-}
-
-export function escalateSupportTicket(
-  ticket: SupportTicket,
-  input: {
-    escalatedByName: string;
-    reason: string;
-  },
-): SupportTicket {
-  const now = new Date().toISOString();
-
-  return appendTicketMessage(
-    {
-      ...ticket,
-      priority: "urgent",
-      slaDueAt: getSlaDueAt("urgent", now),
-      escalationStatus: "pending_admin",
-      escalatedAt: now,
-      escalatedByName: input.escalatedByName,
-      escalationReason: input.reason,
-      adminResolution: undefined,
-      adminResolvedAt: undefined,
-    },
-    {
-      authorType: "support",
-      authorName: input.escalatedByName,
-      body: input.reason,
-      visibility: "internal",
-    },
-  );
-}
-
-export function resolveTicketEscalation(
-  ticket: SupportTicket,
-  input: {
-    adminName: string;
-    resolution: string;
-    status: Exclude<SupportEscalationStatus, "pending_admin">;
-  },
-): SupportTicket {
-  const now = new Date().toISOString();
-
-  return appendTicketMessage(
-    {
-      ...ticket,
-      escalationStatus: input.status,
-      adminResolution: input.resolution,
-      adminResolvedAt: now,
-      status: input.status === "resolved" ? "resolved" : ticket.status,
-    },
-    {
-      authorType: "support",
-      authorName: input.adminName,
-      body: `Admin ${input.status.replaceAll("_", " ")} escalation: ${input.resolution}`,
-      visibility: "internal",
-    },
-  );
-}
-
-export function assignSupportTicket(
-  ticket: SupportTicket,
-  input: { assignedTo: string; assignedToName: string },
-): SupportTicket {
-  return appendTicketMessage(
-    {
-      ...ticket,
-      assignedTo: input.assignedTo,
-      assignedToName: input.assignedToName,
-    },
-    {
-      authorType: "support",
-      authorName: "Maket Lakay Support",
-      body: `Ticket assigned to ${input.assignedToName}.`,
-    },
-  );
-}
-
-export function updateTicketPriority(
-  ticket: SupportTicket,
-  priority: SupportTicketPriority,
-): SupportTicket {
-  return appendTicketMessage(
-    {
-      ...ticket,
-      priority,
-      slaDueAt: getSlaDueAt(priority, ticket.createdAt),
-    },
-    {
-      authorType: "support",
-      authorName: "Maket Lakay Support",
-      body: `Priority changed to ${priority}.`,
-    },
-  );
 }
 
 export function createProductReview(input: {
@@ -281,46 +151,6 @@ export function createStoreReview(input: {
     body: input.body,
     createdAt: new Date().toISOString(),
     status: "published",
-  };
-}
-
-export function createSupportTicket(input: {
-  customerId: string;
-  customerName?: string;
-  orderId?: string;
-  vendorId?: string;
-  storeId?: string;
-  subject: string;
-  category: SupportTicket["category"];
-  message: string;
-}): SupportTicket {
-  const now = new Date().toISOString();
-  const priority: SupportTicketPriority =
-    input.category === "payment" || input.category === "refund" ? "high" : "normal";
-
-  return {
-    id: `ticket-${Date.now()}`,
-    customerId: input.customerId,
-    orderId: input.orderId,
-    vendorId: input.vendorId,
-    storeId: input.storeId,
-    subject: input.subject,
-    category: input.category,
-    priority,
-    status: "open",
-    slaDueAt: getSlaDueAt(priority, now),
-    createdAt: now,
-    updatedAt: now,
-    messages: [
-      {
-        id: `ticket-message-${Date.now()}`,
-        authorType: "customer",
-        authorName: input.customerName ?? "Customer",
-        body: input.message,
-        createdAt: now,
-        visibility: "customer_visible",
-      },
-    ],
   };
 }
 
@@ -404,28 +234,6 @@ export function createMarketplaceReport(input: {
     details: input.details,
     status: "submitted",
     createdAt: new Date().toISOString(),
-  };
-}
-
-export function updateTicketStatus(
-  ticket: SupportTicket,
-  status: SupportTicketStatus,
-): SupportTicket {
-  const now = new Date().toISOString();
-  const message: SupportMessage = {
-    id: `ticket-message-${Date.now()}`,
-    authorType: "support",
-    authorName: "Maket Lakay Support",
-    body: `Status changed to ${status.replaceAll("_", " ")}.`,
-    createdAt: now,
-  };
-
-  return {
-    ...ticket,
-    status,
-    slaDueAt: ticket.slaDueAt ?? getSlaDueAt(ticket.priority, ticket.createdAt),
-    updatedAt: now,
-    messages: [...ticket.messages, message],
   };
 }
 

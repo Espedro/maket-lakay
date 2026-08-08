@@ -32,13 +32,11 @@ import { toast } from "@/hooks/use-toast";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import { addAuditLogEntry } from "@/lib/audit-log";
 import {
-  appendTicketMessage,
   createMarketplaceReport,
-  createSupportTicket,
   getReportTargetLabel,
+  getSlaDueAt,
   getTicketSlaStatus,
   mergeMarketplaceReports,
-  mergeSupportTickets,
 } from "@/lib/support";
 import {
   disputeSchema,
@@ -56,10 +54,13 @@ import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { getRealOrdersByCustomer } from "@/services/orders";
 import {
   addRealDisputeEvidence,
+  addRealSupportTicketMessage,
   createRealDispute,
   createRealRefundRequest,
+  createRealSupportTicket,
   getRealDisputesForCustomer,
   getRealRefundRequestsForCustomer,
+  getRealTicketsForCustomer,
 } from "@/services/support";
 import type { Dispute, Order, RefundRequest, SupportTicket } from "@/types";
 
@@ -120,19 +121,14 @@ function getPublicTicketTimeline(ticket: SupportTicket) {
 }
 
 export function SupportCenterClient() {
-  const {
-    isReady,
-    localReports,
-    localSupportTickets,
-    saveMarketplaceReport,
-    saveSupportTicket,
-  } = useMarketplaceStorage();
+  const { isReady, localReports, saveMarketplaceReport } = useMarketplaceStorage();
   const { user: currentUser, isReady: authReady } = useAuth();
   const activeCustomerId = currentUser?.id ?? "";
   const activeCustomerName = currentUser?.name ?? "";
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [customerDisputes, setCustomerDisputes] = React.useState<Dispute[]>([]);
   const [customerRefundRequests, setCustomerRefundRequests] = React.useState<RefundRequest[]>([]);
+  const [customerTickets, setCustomerTickets] = React.useState<SupportTicket[]>([]);
   const [disputesDataReady, setDisputesDataReady] = React.useState(false);
 
   const refreshDisputesData = React.useCallback(async () => {
@@ -140,19 +136,22 @@ export function SupportCenterClient() {
       setOrders([]);
       setCustomerDisputes([]);
       setCustomerRefundRequests([]);
+      setCustomerTickets([]);
       setDisputesDataReady(true);
       return;
     }
 
     setDisputesDataReady(false);
-    const [realOrders, realDisputes, realRefundRequests] = await Promise.all([
+    const [realOrders, realDisputes, realRefundRequests, realTickets] = await Promise.all([
       getRealOrdersByCustomer(currentUser.id),
       getRealDisputesForCustomer(currentUser.id),
       getRealRefundRequestsForCustomer(currentUser.id),
+      getRealTicketsForCustomer(currentUser.id),
     ]);
     setOrders(realOrders);
     setCustomerDisputes(realDisputes);
     setCustomerRefundRequests(realRefundRequests);
+    setCustomerTickets(realTickets);
     setDisputesDataReady(true);
   }, [currentUser]);
 
@@ -160,11 +159,9 @@ export function SupportCenterClient() {
     refreshDisputesData();
   }, [refreshDisputesData]);
 
-  const supportTickets = mergeSupportTickets(localSupportTickets);
   const reports = mergeMarketplaceReports(localReports).filter(
     (report) => report.reporterCustomerId === activeCustomerId,
   );
-  const customerTickets = supportTickets.filter((ticket) => ticket.customerId === activeCustomerId);
   const [selectedTicketId, setSelectedTicketId] = React.useState<string | null>(null);
   const [ticketQuery, setTicketQuery] = React.useState("");
   const [disputePhotoPreview, setDisputePhotoPreview] = React.useState("");
@@ -253,51 +250,70 @@ export function SupportCenterClient() {
     return orders.find((order) => order.id === orderId) ?? orders[0];
   }
 
-  function submitTicket(input: SupportTicketInput) {
+  async function submitTicket(input: SupportTicketInput) {
     const linkedOrder = input.orderId ? findOrder(input.orderId) : undefined;
-    const linkedStore = linkedOrder ? stores.find((store) => store.id === linkedOrder.storeId) : undefined;
+    const priority: SupportTicket["priority"] =
+      input.category === "payment" || input.category === "refund" ? "high" : "normal";
 
-    const ticket = createSupportTicket({
-        ...input,
-        customerId: activeCustomerId,
-        customerName: activeCustomerName,
-        orderId: input.orderId || undefined,
-        storeId: linkedOrder?.storeId,
-        vendorId: linkedStore?.vendorId,
+    const result = await createRealSupportTicket({
+      ...input,
+      customerProfileId: activeCustomerId,
+      customerName: activeCustomerName,
+      orderId: input.orderId || undefined,
+      storeId: linkedOrder?.storeId,
+      priority,
+      slaDueAt: getSlaDueAt(priority),
+    });
+
+    if (!result.ok) {
+      toast({
+        title: "Could not open ticket",
+        description: result.reason,
+        variant: "destructive",
       });
+      return;
+    }
 
-    saveSupportTicket(ticket);
     addAuditLogEntry({
       actorId: activeCustomerId,
       actorName: activeCustomerName,
       actorRole: "customer",
       action: "support.ticket_created",
       entityType: "support_ticket",
-      entityId: ticket.id,
-      entityLabel: ticket.subject,
+      entityId: result.ticket.id,
+      entityLabel: result.ticket.subject,
       summary: "Customer created a support ticket.",
-      newValue: ticket.status,
-      severity: ticket.priority === "high" || ticket.priority === "urgent" ? "warning" : "info",
+      newValue: result.ticket.status,
+      severity: priority === "high" ? "warning" : "info",
     });
     ticketForm.reset({ category: input.category, subject: "", message: "", orderId: "" });
     toast({
       title: "Support ticket opened",
-      description: "Maket Lakay support received the local ticket.",
+      description: "Maket Lakay support received your ticket.",
     });
-    setSelectedTicketId(ticket.id);
+    setSelectedTicketId(result.ticket.id);
+    await refreshDisputesData();
   }
 
-  function submitTicketReply(input: SupportReplyInput) {
+  async function submitTicketReply(input: SupportReplyInput) {
     if (!selectedTicket) return;
 
-    const updatedTicket = appendTicketMessage(selectedTicket, {
+    const result = await addRealSupportTicketMessage(selectedTicket.id, {
       authorType: "customer",
       authorName: activeCustomerName,
       body: input.message,
       visibility: "customer_visible",
     });
 
-    saveSupportTicket(updatedTicket);
+    if (!result.ok) {
+      toast({
+        title: "Could not send reply",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
     replyForm.reset({ message: "" });
     toast({
       title: "Reply sent",
@@ -314,6 +330,7 @@ export function SupportCenterClient() {
       summary: "Customer replied to a support ticket.",
       severity: "info",
     });
+    await refreshDisputesData();
   }
 
   async function submitRefund(input: RefundRequestInput) {

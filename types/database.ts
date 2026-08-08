@@ -747,6 +747,132 @@ export type Database = {
           },
         ]
       }
+      support_ticket_messages: {
+        Row: {
+          author_name: string
+          author_type: string
+          body: string
+          created_at: string
+          id: string
+          ticket_id: string
+          visibility: string
+        }
+        Insert: {
+          author_name: string
+          author_type: string
+          body: string
+          created_at?: string
+          id?: string
+          ticket_id: string
+          visibility?: string
+        }
+        Update: {
+          author_name?: string
+          author_type?: string
+          body?: string
+          created_at?: string
+          id?: string
+          ticket_id?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          admin_resolution: string | null
+          admin_resolved_at: string | null
+          assigned_to: string | null
+          assigned_to_name: string | null
+          category: string
+          created_at: string
+          customer_profile_id: string
+          escalated_at: string | null
+          escalated_by_name: string | null
+          escalation_reason: string | null
+          escalation_status: string | null
+          id: string
+          order_id: string | null
+          priority: string
+          sla_due_at: string | null
+          status: string
+          store_id: string | null
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          admin_resolution?: string | null
+          admin_resolved_at?: string | null
+          assigned_to?: string | null
+          assigned_to_name?: string | null
+          category?: string
+          created_at?: string
+          customer_profile_id: string
+          escalated_at?: string | null
+          escalated_by_name?: string | null
+          escalation_reason?: string | null
+          escalation_status?: string | null
+          id?: string
+          order_id?: string | null
+          priority?: string
+          sla_due_at?: string | null
+          status?: string
+          store_id?: string | null
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          admin_resolution?: string | null
+          admin_resolved_at?: string | null
+          assigned_to?: string | null
+          assigned_to_name?: string | null
+          category?: string
+          created_at?: string
+          customer_profile_id?: string
+          escalated_at?: string | null
+          escalated_by_name?: string | null
+          escalation_reason?: string | null
+          escalation_status?: string | null
+          id?: string
+          order_id?: string | null
+          priority?: string
+          sla_due_at?: string | null
+          status?: string
+          store_id?: string | null
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_tickets_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_tickets_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_promotions: {
         Row: {
           created_at: string

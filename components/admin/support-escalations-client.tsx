@@ -19,13 +19,9 @@ import { toast } from "@/hooks/use-toast";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import { addAuditLogEntry } from "@/lib/audit-log";
 import { mergeOrders } from "@/lib/orders";
-import {
-  createSupportCustomerNotification,
-  getTicketSlaStatus,
-  mergeSupportTickets,
-  resolveTicketEscalation,
-} from "@/lib/support";
+import { createSupportCustomerNotification, getTicketSlaStatus } from "@/lib/support";
 import { formatDate } from "@/lib/utils";
+import { addRealSupportTicketMessage, getAllRealTickets, updateRealSupportTicket } from "@/services/support";
 import type { SupportEscalationStatus, SupportTicket } from "@/types";
 
 type EscalationFilter = "all" | SupportEscalationStatus;
@@ -72,23 +68,25 @@ function ticketPriorityBadge(ticket: SupportTicket) {
 }
 
 export function SupportEscalationsClient() {
-  const {
-    isReady,
-    localOrders,
-    localSupportTickets,
-    saveCustomerNotification,
-    saveSupportTicket,
-  } = useMarketplaceStorage();
+  const { isReady, localOrders, saveCustomerNotification } = useMarketplaceStorage();
   const orders = React.useMemo(() => mergeOrders(localOrders), [localOrders]);
-  const tickets = React.useMemo(
-    () => mergeSupportTickets(localSupportTickets),
-    [localSupportTickets],
-  );
+  const [tickets, setTickets] = React.useState<SupportTicket[]>([]);
+  const [ticketsReady, setTicketsReady] = React.useState(false);
   const escalatedTickets = tickets.filter((ticket) => Boolean(getEscalationStatus(ticket)));
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState<EscalationFilter>("all");
   const [selectedTicketId, setSelectedTicketId] = React.useState<string | null>(null);
   const [resolution, setResolution] = React.useState("");
+
+  const refreshTickets = React.useCallback(async () => {
+    setTicketsReady(false);
+    setTickets(await getAllRealTickets());
+    setTicketsReady(true);
+  }, []);
+
+  React.useEffect(() => {
+    refreshTickets();
+  }, [refreshTickets]);
   const selectedTicket =
     escalatedTickets.find((ticket) => ticket.id === selectedTicketId) ??
     escalatedTickets[0] ??
@@ -128,7 +126,10 @@ export function SupportEscalationsClient() {
     }
   }, [escalatedTickets, selectedTicketId]);
 
-  function resolveEscalation(ticket: SupportTicket, status: Exclude<SupportEscalationStatus, "pending_admin">) {
+  async function resolveEscalation(
+    ticket: SupportTicket,
+    status: Exclude<SupportEscalationStatus, "pending_admin">,
+  ) {
     const nextResolution = resolution.trim();
 
     if (!nextResolution) {
@@ -140,13 +141,30 @@ export function SupportEscalationsClient() {
       return;
     }
 
-    const nextTicket = resolveTicketEscalation(ticket, {
-      adminName: "Maket Admin",
-      resolution: nextResolution,
-      status,
+    const now = new Date().toISOString();
+    const result = await updateRealSupportTicket(ticket.id, {
+      escalationStatus: status,
+      adminResolution: nextResolution,
+      adminResolvedAt: now,
+      status: status === "resolved" ? "resolved" : ticket.status,
     });
 
-    saveSupportTicket(nextTicket);
+    if (!result.ok) {
+      toast({
+        title: "Could not update escalation",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await addRealSupportTicketMessage(ticket.id, {
+      authorType: "support",
+      authorName: "Maket Admin",
+      body: `Admin ${status.replaceAll("_", " ")} escalation: ${nextResolution}`,
+      visibility: "internal",
+    });
+
     saveCustomerNotification(
       createSupportCustomerNotification({
         customerId: ticket.customerId,
@@ -179,9 +197,10 @@ export function SupportEscalationsClient() {
       title: "Escalation updated",
       description: `${ticket.id} was marked ${status.replaceAll("_", " ")}.`,
     });
+    await refreshTickets();
   }
 
-  if (!isReady) {
+  if (!isReady || !ticketsReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 

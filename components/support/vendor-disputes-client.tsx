@@ -25,7 +25,7 @@ import { useVendorScope } from "@/hooks/use-vendor-scope";
 import { toast } from "@/hooks/use-toast";
 import { addAuditLogEntry } from "@/lib/audit-log";
 import { mergeOrders } from "@/lib/orders";
-import { appendTicketMessage, getTicketSlaStatus, mergeSupportTickets } from "@/lib/support";
+import { getTicketSlaStatus } from "@/lib/support";
 import {
   vendorDisputeEvidenceSchema,
   vendorSupportReplySchema,
@@ -35,8 +35,10 @@ import {
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import {
   addRealDisputeEvidence,
+  addRealSupportTicketMessage,
   getRealDisputesForStore,
   getRealRefundRequestsForStore,
+  getRealTicketsForStore,
 } from "@/services/support";
 import type { Dispute, RefundRequest, SupportTicket } from "@/types";
 
@@ -71,17 +73,12 @@ function readFileAsDataUrl(file: File) {
 }
 
 export function VendorDisputesClient() {
-  const {
-    isReady,
-    localOrders,
-    localSupportTickets,
-    saveSupportTicket,
-  } = useMarketplaceStorage();
-  const { auth, isReady: scopeReady, scopedStores, vendorId } = useVendorScope();
+  const { isReady, localOrders } = useMarketplaceStorage();
+  const { auth, isReady: scopeReady, scopedStores } = useVendorScope();
   const orders = mergeOrders(localOrders);
-  const tickets = mergeSupportTickets(localSupportTickets);
   const [vendorDisputes, setVendorDisputes] = React.useState<Dispute[]>([]);
   const [vendorRefunds, setVendorRefunds] = React.useState<RefundRequest[]>([]);
+  const [vendorTickets, setVendorTickets] = React.useState<SupportTicket[]>([]);
   const [disputesDataReady, setDisputesDataReady] = React.useState(false);
   const [tab, setTab] = React.useState<VendorCaseTab>("tickets");
   const [selectedTicketId, setSelectedTicketId] = React.useState<string | null>(null);
@@ -97,26 +94,24 @@ export function VendorDisputesClient() {
     defaultValues: { title: "", notes: "" },
   });
 
-  const vendorStoreIds = React.useMemo(
-    () => new Set(scopedStores.map((store) => store.id)),
-    [scopedStores],
-  );
-
   const refreshDisputesData = React.useCallback(async () => {
     if (scopedStores.length === 0) {
       setVendorDisputes([]);
       setVendorRefunds([]);
+      setVendorTickets([]);
       setDisputesDataReady(true);
       return;
     }
 
     setDisputesDataReady(false);
-    const [disputesByStore, refundsByStore] = await Promise.all([
+    const [disputesByStore, refundsByStore, ticketsByStore] = await Promise.all([
       Promise.all(scopedStores.map((store) => getRealDisputesForStore(store.id))),
       Promise.all(scopedStores.map((store) => getRealRefundRequestsForStore(store.id))),
+      Promise.all(scopedStores.map((store) => getRealTicketsForStore(store.id))),
     ]);
     setVendorDisputes(disputesByStore.flat());
     setVendorRefunds(refundsByStore.flat());
+    setVendorTickets(ticketsByStore.flat());
     setDisputesDataReady(true);
   }, [scopedStores]);
 
@@ -130,13 +125,6 @@ export function VendorDisputesClient() {
     return ticket.storeId ?? orderStoreId;
   }
 
-  const vendorTickets = tickets.filter((ticket) => {
-    const linkedStoreId = ticketStoreId(ticket);
-    return (
-      (linkedStoreId ? vendorStoreIds.has(linkedStoreId) : false) ||
-      (vendorId ? ticket.vendorId === vendorId : false)
-    );
-  });
   const selectedTicket =
     vendorTickets.find((ticket) => ticket.id === selectedTicketId) ?? vendorTickets[0] ?? null;
   const selectedDispute =
@@ -156,17 +144,25 @@ export function VendorDisputesClient() {
     }
   }, [selectedDisputeId, vendorDisputes]);
 
-  function sendVendorReply(values: VendorSupportReplyInput) {
+  async function sendVendorReply(values: VendorSupportReplyInput) {
     if (!selectedTicket) return;
 
-    const updatedTicket = appendTicketMessage(selectedTicket, {
+    const result = await addRealSupportTicketMessage(selectedTicket.id, {
       authorType: "vendor",
       authorName: auth.user?.name ?? "",
       body: values.message,
       visibility: "customer_visible",
     });
 
-    saveSupportTicket(updatedTicket);
+    if (!result.ok) {
+      toast({
+        title: "Could not send reply",
+        description: result.reason,
+        variant: "destructive",
+      });
+      return;
+    }
+
     replyForm.reset({ message: "" });
     toast({
       title: "Vendor reply sent",
@@ -183,6 +179,7 @@ export function VendorDisputesClient() {
       summary: "Vendor replied to a support ticket.",
       severity: "info",
     });
+    await refreshDisputesData();
   }
 
   async function addEvidence(values: VendorDisputeEvidenceInput) {

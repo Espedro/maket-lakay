@@ -24,7 +24,6 @@ import {
   LOCAL_REPORTS_KEY,
   LOCAL_REVIEWS_KEY,
   LOCAL_STORE_REVIEWS_KEY,
-  LOCAL_SUPPORT_TICKETS_KEY,
 } from "@/lib/support";
 import type {
   CheckoutOrderSnapshot,
@@ -41,7 +40,6 @@ import type {
   RefundRecord,
   Review,
   StoreReview,
-  SupportTicket,
 } from "@/types";
 
 const CART_KEY = "maket-lakay-cart";
@@ -95,7 +93,6 @@ export function useMarketplaceStorage() {
   >([]);
   const [localReviews, setLocalReviews] = React.useState<Review[]>([]);
   const [localStoreReviews, setLocalStoreReviews] = React.useState<StoreReview[]>([]);
-  const [localSupportTickets, setLocalSupportTickets] = React.useState<SupportTicket[]>([]);
   const [localRefundRequests, setLocalRefundRequests] = React.useState<RefundRequest[]>([]);
   const [localDisputes, setLocalDisputes] = React.useState<Dispute[]>([]);
   const [localReports, setLocalReports] = React.useState<MarketplaceReport[]>([]);
@@ -117,7 +114,6 @@ export function useMarketplaceStorage() {
     );
     setLocalReviews(readJson<Review[]>(LOCAL_REVIEWS_KEY, []));
     setLocalStoreReviews(readJson<StoreReview[]>(LOCAL_STORE_REVIEWS_KEY, []));
-    setLocalSupportTickets(readJson<SupportTicket[]>(LOCAL_SUPPORT_TICKETS_KEY, []));
     setLocalRefundRequests(readJson<RefundRequest[]>(LOCAL_REFUND_REQUESTS_KEY, []));
     setLocalDisputes(readJson<Dispute[]>(LOCAL_DISPUTES_KEY, []));
     setLocalReports(readJson<MarketplaceReport[]>(LOCAL_REPORTS_KEY, []));
@@ -391,16 +387,6 @@ export function useMarketplaceStorage() {
     writeJson(LOCAL_STORE_REVIEWS_KEY, nextReviews);
   }, []);
 
-  const saveSupportTicket = React.useCallback((ticket: SupportTicket) => {
-    const tickets = readJson<SupportTicket[]>(LOCAL_SUPPORT_TICKETS_KEY, []);
-    const exists = tickets.some((item) => item.id === ticket.id);
-    const nextTickets = exists
-      ? tickets.map((item) => (item.id === ticket.id ? ticket : item))
-      : [ticket, ...tickets];
-
-    writeJson(LOCAL_SUPPORT_TICKETS_KEY, nextTickets);
-  }, []);
-
   const saveRefundRequest = React.useCallback((request: RefundRequest) => {
     const requests = readJson<RefundRequest[]>(LOCAL_REFUND_REQUESTS_KEY, []);
     const exists = requests.some((item) => item.id === request.id);
@@ -534,7 +520,6 @@ export function useMarketplaceStorage() {
     localReports,
     localReviews,
     localStoreReviews,
-    localSupportTickets,
     recentlyViewed,
     removeFromCart,
     removeSavedItem,
@@ -553,7 +538,6 @@ export function useMarketplaceStorage() {
     saveRefundRequest,
     saveRefundRecord,
     saveStoreReview,
-    saveSupportTicket,
     saveForLater,
     toggleWishlist,
     trackRecentlyViewed,

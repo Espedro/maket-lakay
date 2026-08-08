@@ -18,7 +18,6 @@ import type {
   Review,
   Store,
   StoreReview,
-  SupportTicket,
   TrackingEvent,
   Vendor,
   VendorWallet,
@@ -905,29 +904,6 @@ export const storeReviews: StoreReview[] = [
     body: "The store confirmed quickly and shared clear delivery updates.",
     createdAt: "2026-07-14",
     status: "published",
-  },
-];
-
-export const supportTickets: SupportTicket[] = [
-  {
-    id: "ticket-1001",
-    customerId: "customer-rose",
-    orderId: "ML-1024",
-    subject: "Damaged school kit item",
-    category: "refund",
-    priority: "normal",
-    status: "open",
-    createdAt: "2026-07-14T11:08:00Z",
-    updatedAt: "2026-07-14T11:08:00Z",
-    messages: [
-      {
-        id: "ticket-msg-1001-1",
-        authorType: "customer",
-        authorName: "Rose Bellevue",
-        body: "One notebook arrived bent and torn. Can support help with a refund?",
-        createdAt: "2026-07-14T11:08:00Z",
-      },
-    ],
   },
 ];
 
