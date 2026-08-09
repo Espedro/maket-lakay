@@ -2,11 +2,14 @@ import type { Json, Tables, TablesInsert } from "@/types/database";
 import type {
   Category,
   CustomerAddress,
+  DeliveryAssignment,
   DeliveryZone,
   Dispute,
   DisputeEvidence,
   Order,
+  OrderStatusEvent,
   Product,
+  ProofOfDelivery,
   RefundRequest,
   Review,
   Store,
@@ -159,6 +162,17 @@ export function toManagedProductRow(product: ManagedProduct): TablesInsert<"prod
 
 interface OrderRowWithItems extends Tables<"orders"> {
   order_items: Tables<"order_items">[];
+  order_tracking_events?: Tables<"order_tracking_events">[];
+}
+
+export function mapOrderTrackingEventRow(row: Tables<"order_tracking_events">): OrderStatusEvent {
+  return {
+    id: row.id,
+    status: row.status as OrderStatusEvent["status"],
+    label: row.label,
+    message: row.message,
+    createdAt: row.created_at,
+  };
 }
 
 export function mapOrderRow(row: OrderRowWithItems): Order {
@@ -181,6 +195,38 @@ export function mapOrderRow(row: OrderRowWithItems): Order {
     deliveryCity: row.delivery_city ?? "",
     trackingNumber: row.tracking_number ?? undefined,
     estimatedDeliveryAt: row.estimated_delivery_at ?? undefined,
+    markedForReview: row.marked_for_review,
+    refundIssued: row.refund_issued,
+    statusHistory: (row.order_tracking_events ?? [])
+      .slice()
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .map(mapOrderTrackingEventRow),
+  };
+}
+
+export function mapDeliveryAssignmentRow(row: Tables<"delivery_assignments">): DeliveryAssignment {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    zoneId: row.zone_id ?? "",
+    courierName: row.courier_name,
+    courierPhone: row.courier_phone,
+    status: row.status as DeliveryAssignment["status"],
+    assignedAt: row.assigned_at,
+    pickedUpAt: row.picked_up_at ?? undefined,
+    completedAt: row.completed_at ?? undefined,
+  };
+}
+
+export function mapProofOfDeliveryRow(row: Tables<"proof_of_deliveries">): ProofOfDelivery {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    assignmentId: row.assignment_id ?? "",
+    recipientName: row.recipient_name,
+    method: row.method as ProofOfDelivery["method"],
+    note: row.note ?? "",
+    deliveredAt: row.delivered_at,
   };
 }
 

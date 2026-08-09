@@ -41,6 +41,24 @@ export type Database = {
         }
         Relationships: []
       }
+      commission_settings: {
+        Row: {
+          default_rate: number
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          default_rate?: number
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          default_rate?: number
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customer_addresses: {
         Row: {
           city: string
@@ -102,6 +120,57 @@ export type Database = {
             columns: ["customer_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_assignments: {
+        Row: {
+          assigned_at: string
+          completed_at: string | null
+          courier_name: string
+          courier_phone: string
+          id: string
+          order_id: string
+          picked_up_at: string | null
+          status: string
+          zone_id: string | null
+        }
+        Insert: {
+          assigned_at?: string
+          completed_at?: string | null
+          courier_name: string
+          courier_phone: string
+          id?: string
+          order_id: string
+          picked_up_at?: string | null
+          status?: string
+          zone_id?: string | null
+        }
+        Update: {
+          assigned_at?: string
+          completed_at?: string | null
+          courier_name?: string
+          courier_phone?: string
+          id?: string
+          order_id?: string
+          picked_up_at?: string | null
+          status?: string
+          zone_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_assignments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_assignments_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_zones"
             referencedColumns: ["id"]
           },
         ]
@@ -289,6 +358,44 @@ export type Database = {
           },
         ]
       }
+      order_tracking_events: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          location: string | null
+          message: string
+          order_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          location?: string | null
+          message: string
+          order_id: string
+          status: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          location?: string | null
+          message?: string
+          order_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_tracking_events_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           currency: string
@@ -297,7 +404,9 @@ export type Database = {
           delivery_fee: number
           estimated_delivery_at: string | null
           id: string
+          marked_for_review: boolean
           placed_at: string
+          refund_issued: boolean
           status: Database["public"]["Enums"]["order_status"]
           store_id: string
           subtotal: number
@@ -311,7 +420,9 @@ export type Database = {
           delivery_fee?: number
           estimated_delivery_at?: string | null
           id: string
+          marked_for_review?: boolean
           placed_at?: string
+          refund_issued?: boolean
           status?: Database["public"]["Enums"]["order_status"]
           store_id: string
           subtotal: number
@@ -325,7 +436,9 @@ export type Database = {
           delivery_fee?: number
           estimated_delivery_at?: string | null
           id?: string
+          marked_for_review?: boolean
           placed_at?: string
+          refund_issued?: boolean
           status?: Database["public"]["Enums"]["order_status"]
           store_id?: string
           subtotal?: number
@@ -575,6 +688,51 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      proof_of_deliveries: {
+        Row: {
+          assignment_id: string | null
+          delivered_at: string
+          id: string
+          method: string
+          note: string | null
+          order_id: string
+          recipient_name: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          delivered_at?: string
+          id?: string
+          method?: string
+          note?: string | null
+          order_id: string
+          recipient_name: string
+        }
+        Update: {
+          assignment_id?: string | null
+          delivered_at?: string
+          id?: string
+          method?: string
+          note?: string | null
+          order_id?: string
+          recipient_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proof_of_deliveries_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proof_of_deliveries_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       refund_requests: {
         Row: {
@@ -869,6 +1027,32 @@ export type Database = {
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_commission_rates: {
+        Row: {
+          rate: number
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          rate: number
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          rate?: number
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_commission_rates_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: true
+            referencedRelation: "vendors"
             referencedColumns: ["id"]
           },
         ]

@@ -45,7 +45,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   shipped: "Shipped",
 };
 
-const ORDER_STATUS_MESSAGES: Record<OrderStatus, string> = {
+export const ORDER_STATUS_MESSAGES: Record<OrderStatus, string> = {
   cancelled: "The order was cancelled.",
   confirmed: "The vendor accepted the order.",
   delivered: "The order was delivered to the customer.",

@@ -104,7 +104,7 @@ export function AdminOrderDetailsClient({ orderId }: AdminOrderDetailsClientProp
   );
   const flag = state.orderFlags[order.id];
 
-  function issueRefund(targetOrder: Order) {
+  async function issueRefund(targetOrder: Order) {
     const refundRecord: RefundRecord = {
       id: `refund-admin-${Date.now()}`,
       paymentId: payment?.id ?? `payment-${targetOrder.id}`,
@@ -113,14 +113,14 @@ export function AdminOrderDetailsClient({ orderId }: AdminOrderDetailsClientProp
       amount: targetOrder.total,
       currency: targetOrder.currency,
       status: "processed",
-      reason: "Admin simulated refund from order details.",
+      reason: "Admin refund from order details.",
       createdAt: new Date().toISOString(),
     };
 
     saveRefundRecord(refundRecord);
-    markRefundIssued(targetOrder.id);
+    await markRefundIssued(targetOrder.id);
     toast({
-      title: "Simulated refund issued",
+      title: "Refund issued",
       description: `${formatCurrency(targetOrder.total, targetOrder.currency)} refund recorded for ${targetOrder.id}.`,
     });
   }
@@ -129,7 +129,7 @@ export function AdminOrderDetailsClient({ orderId }: AdminOrderDetailsClientProp
     if (!pendingAction) return;
 
     if (pendingAction.type === "review") {
-      markOrderForReview(pendingAction.order.id);
+      await markOrderForReview(pendingAction.order.id);
     }
 
     if (pendingAction.type === "cancel") {
@@ -152,7 +152,7 @@ export function AdminOrderDetailsClient({ orderId }: AdminOrderDetailsClientProp
     }
 
     if (pendingAction.type === "refund") {
-      issueRefund(pendingAction.order);
+      await issueRefund(pendingAction.order);
     }
 
     if (pendingAction.type === "delivery") {
@@ -276,7 +276,7 @@ export function AdminOrderDetailsClient({ orderId }: AdminOrderDetailsClientProp
               />
               <ActionButton
                 icon={RefreshCw}
-                label="Issue simulated refund"
+                label="Issue refund"
                 onClick={() => setPendingAction({ type: "refund", order })}
               />
               <ActionButton
@@ -309,7 +309,7 @@ export function AdminOrderDetailsClient({ orderId }: AdminOrderDetailsClientProp
         <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>Confirm order action</DialogTitle>
-            <DialogDescription>This updates local order data only.</DialogDescription>
+            <DialogDescription>This updates the real order record.</DialogDescription>
           </DialogHeader>
           <div className="border bg-muted/30 p-4 text-sm">
             {pendingAction?.type === "delivery"

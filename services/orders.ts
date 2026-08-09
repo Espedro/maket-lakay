@@ -2,7 +2,10 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { mapOrderRow } from "@/lib/supabase/mappers";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_MESSAGES } from "@/lib/orders";
 import type { Order, OrderStatus } from "@/types";
+
+const ORDERS_SELECT = "*, order_items(*), order_tracking_events(*)";
 
 export interface RealOrderInput {
   id: string;
@@ -60,15 +63,28 @@ export async function createRealOrders(orderInputs: RealOrderInput[]) {
     return { ok: false as const, reason: itemsError.message };
   }
 
+  const eventRows = orderInputs.flatMap((order) => {
+    const events = [{ status: "pending" as OrderStatus, createdAt: order.placedAt }];
+    if (order.status === "confirmed") {
+      events.push({ status: "confirmed", createdAt: order.placedAt });
+    }
+    return events.map((event) => ({
+      order_id: order.id,
+      status: event.status,
+      label: ORDER_STATUS_LABELS[event.status],
+      message: ORDER_STATUS_MESSAGES[event.status],
+      created_at: event.createdAt,
+    }));
+  });
+
+  await supabase.from("order_tracking_events").insert(eventRows);
+
   return { ok: true as const };
 }
 
 export async function getRealOrdersByStore(storeId: string): Promise<Order[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("orders")
-    .select("*, order_items(*)")
-    .eq("store_id", storeId);
+  const { data, error } = await supabase.from("orders").select(ORDERS_SELECT).eq("store_id", storeId);
 
   if (error || !data) {
     return [];
@@ -81,7 +97,7 @@ export async function getRealOrdersByCustomer(customerProfileId: string): Promis
   const supabase = createClient();
   const { data, error } = await supabase
     .from("orders")
-    .select("*, order_items(*)")
+    .select(ORDERS_SELECT)
     .eq("customer_profile_id", customerProfileId);
 
   if (error || !data) {
@@ -91,10 +107,25 @@ export async function getRealOrdersByCustomer(customerProfileId: string): Promis
   return data.map(mapOrderRow);
 }
 
+export async function getRealOrderById(orderId: string): Promise<Order | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(ORDERS_SELECT)
+    .eq("id", orderId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return mapOrderRow(data);
+}
+
 /** Admin-only: relies on the admin RLS bypass to see every order. */
 export async function getAllRealOrders(): Promise<Order[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from("orders").select("*, order_items(*)");
+  const { data, error } = await supabase.from("orders").select(ORDERS_SELECT);
 
   if (error || !data) {
     return [];
@@ -106,11 +137,47 @@ export async function getAllRealOrders(): Promise<Order[]> {
 /**
  * Admin-only (RLS). Silently affects 0 rows if orderId doesn't exist as a
  * real order (e.g. a mock/demo order id) — safe to call as a best-effort
- * dual write alongside the existing local order-status update.
+ * dual write alongside the existing local order-status update. Also records
+ * a real tracking-event row for the transition.
  */
 export async function updateRealOrderStatus(orderId: string, status: OrderStatus) {
   const supabase = createClient();
   const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
+
+  if (error) {
+    return { ok: false as const, reason: error.message };
+  }
+
+  await supabase.from("order_tracking_events").insert({
+    order_id: orderId,
+    status,
+    label: ORDER_STATUS_LABELS[status],
+    message: ORDER_STATUS_MESSAGES[status],
+  });
+
+  return { ok: true as const };
+}
+
+export async function updateRealOrderReviewFlag(orderId: string, markedForReview: boolean) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("orders")
+    .update({ marked_for_review: markedForReview })
+    .eq("id", orderId);
+
+  if (error) {
+    return { ok: false as const, reason: error.message };
+  }
+
+  return { ok: true as const };
+}
+
+export async function updateRealOrderRefundFlag(orderId: string, refundIssued: boolean) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("orders")
+    .update({ refund_issued: refundIssued })
+    .eq("id", orderId);
 
   if (error) {
     return { ok: false as const, reason: error.message };

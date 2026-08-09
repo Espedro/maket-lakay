@@ -16,6 +16,9 @@ import {
   ORDER_WORKFLOW,
 } from "@/lib/orders";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { getRealOrderById } from "@/services/orders";
+import { getRealAssignmentForOrder, getRealProofForOrder } from "@/services/delivery";
+import type { DeliveryAssignment, Order, ProofOfDelivery } from "@/types";
 
 interface OrderTrackingClientProps {
   orderId: string;
@@ -27,10 +30,42 @@ function getStoreName(storeId: string) {
 
 export function OrderTrackingClient({ orderId }: OrderTrackingClientProps) {
   const { isReady, localAssignments, localOrders, localProofs } = useMarketplaceStorage();
-  const order = mergeOrders(localOrders).find((item) => item.id === orderId);
+  const localOrder = mergeOrders(localOrders).find((item) => item.id === orderId);
   const assignments = mergeAssignments(localAssignments);
+  const [realOrder, setRealOrder] = React.useState<Order | null>(null);
+  const [realAssignment, setRealAssignment] = React.useState<DeliveryAssignment | null>(null);
+  const [realProof, setRealProof] = React.useState<ProofOfDelivery | null>(null);
+  const [realDataReady, setRealDataReady] = React.useState(false);
 
-  if (!isReady) {
+  React.useEffect(() => {
+    let active = true;
+
+    if (localOrder) {
+      setRealDataReady(true);
+      return;
+    }
+
+    setRealDataReady(false);
+    Promise.all([
+      getRealOrderById(orderId),
+      getRealAssignmentForOrder(orderId),
+      getRealProofForOrder(orderId),
+    ]).then(([fetchedOrder, fetchedAssignment, fetchedProof]) => {
+      if (!active) return;
+      setRealOrder(fetchedOrder);
+      setRealAssignment(fetchedAssignment);
+      setRealProof(fetchedProof);
+      setRealDataReady(true);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [orderId, localOrder]);
+
+  const order = localOrder ?? realOrder ?? undefined;
+
+  if (!isReady || !realDataReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 
@@ -39,18 +74,18 @@ export function OrderTrackingClient({ orderId }: OrderTrackingClientProps) {
       <EmptyState
         icon={Package}
         title="Order not found"
-        description="This order could not be found in local marketplace data."
+        description="This order could not be found."
         actionLabel="View orders"
       />
     );
   }
 
-  const assignment = assignments.find((item) => item.id === order.deliveryAssignmentId);
-  const zone = deliveryZones.find((item) => item.id === order.deliveryZoneId);
+  const assignment = realAssignment ?? assignments.find((item) => item.id === order.deliveryAssignmentId);
+  const zone = deliveryZones.find((item) => item.id === (assignment?.zoneId ?? order.deliveryZoneId));
   const address = customerAddresses.find(
     (item) => item.customerId === order.customerId && item.city === order.deliveryCity,
   );
-  const proof = localProofs.find((item) => item.id === order.proofOfDeliveryId);
+  const proof = realProof ?? localProofs.find((item) => item.id === order.proofOfDeliveryId);
   const timeline = getOrderTrackingEvents(order);
   const currentStepIndex = ORDER_WORKFLOW.indexOf(order.status);
 

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2, Map, PackageCheck, Route, Truck } from "lucide-react";
+import { CheckCircle2, Map as MapIcon, PackageCheck, Route, Truck } from "lucide-react";
 
 import { StatusBadge } from "@/components/marketplace/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,9 @@ import { deliveryZones, proofsOfDelivery, stores } from "@/data/mock-data";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
 import { mergeAssignments, mergeOrders } from "@/lib/orders";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { getAllRealAssignments, getAllRealProofs } from "@/services/delivery";
+import { getAllRealOrders } from "@/services/orders";
+import type { DeliveryAssignment, Order, ProofOfDelivery } from "@/types";
 
 function getStoreName(storeId: string) {
   return stores.find((store) => store.id === storeId)?.name ?? "Marketplace store";
@@ -17,15 +20,36 @@ function getStoreName(storeId: string) {
 
 export function AdminDeliveryClient() {
   const { isReady, localAssignments, localOrders, localProofs } = useMarketplaceStorage();
-  const orders = mergeOrders(localOrders);
-  const assignments = mergeAssignments(localAssignments);
-  const proofs = [...localProofs, ...proofsOfDelivery];
+  const [realOrders, setRealOrders] = React.useState<Order[]>([]);
+  const [realAssignments, setRealAssignments] = React.useState<DeliveryAssignment[]>([]);
+  const [realProofs, setRealProofs] = React.useState<ProofOfDelivery[]>([]);
+  const [realDataReady, setRealDataReady] = React.useState(false);
+
+  React.useEffect(() => {
+    Promise.all([getAllRealOrders(), getAllRealAssignments(), getAllRealProofs()]).then(
+      ([fetchedOrders, fetchedAssignments, fetchedProofs]) => {
+        setRealOrders(fetchedOrders);
+        setRealAssignments(fetchedAssignments);
+        setRealProofs(fetchedProofs);
+        setRealDataReady(true);
+      },
+    );
+  }, []);
+
+  const orders = React.useMemo(() => {
+    const merged = new Map<string, Order>();
+    mergeOrders(localOrders).forEach((order) => merged.set(order.id, order));
+    realOrders.forEach((order) => merged.set(order.id, order));
+    return Array.from(merged.values());
+  }, [localOrders, realOrders]);
+  const assignments = [...mergeAssignments(localAssignments), ...realAssignments];
+  const proofs = [...localProofs, ...proofsOfDelivery, ...realProofs];
   const inTransitCount = orders.filter((order) =>
     ["ready_for_delivery", "out_for_delivery", "shipped"].includes(order.status),
   ).length;
   const deliveredCount = orders.filter((order) => order.status === "delivered").length;
 
-  if (!isReady) {
+  if (!isReady || !realDataReady) {
     return <div className="h-96 animate-pulse border bg-muted" />;
   }
 
@@ -33,7 +57,7 @@ export function AdminDeliveryClient() {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Active zones", value: deliveryZones.filter((zone) => zone.active).length, icon: Map },
+          { label: "Active zones", value: deliveryZones.filter((zone) => zone.active).length, icon: MapIcon },
           { label: "Assignments", value: assignments.length, icon: Truck },
           { label: "In delivery flow", value: inTransitCount, icon: Route },
           { label: "Proof records", value: proofs.length, icon: CheckCircle2 },

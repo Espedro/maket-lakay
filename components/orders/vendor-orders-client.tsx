@@ -37,7 +37,13 @@ import {
 } from "@/lib/orders";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { getRealOrdersByStore, updateRealOrderStatus } from "@/services/orders";
-import type { Order, OrderStatus, PaymentRecord, Store } from "@/types";
+import {
+  createRealDeliveryAssignment,
+  createRealProofOfDelivery,
+  getRealAssignmentsForStore,
+  updateRealAssignmentStatus,
+} from "@/services/delivery";
+import type { DeliveryAssignment, Order, OrderStatus, PaymentRecord, Store } from "@/types";
 
 type OrderFilter = OrderStatus | "all";
 
@@ -98,25 +104,26 @@ export function VendorOrdersClient() {
   const [filter, setFilter] = React.useState<OrderFilter>("all");
   const [storeFilter, setStoreFilter] = React.useState("all");
   const [realOrders, setRealOrders] = React.useState<Order[]>([]);
+  const [realAssignments, setRealAssignments] = React.useState<DeliveryAssignment[]>([]);
 
-  React.useEffect(() => {
+  const refreshRealData = React.useCallback(async () => {
     if (!scopeReady || scopedStoreIds.size === 0) {
       setRealOrders([]);
+      setRealAssignments([]);
       return;
     }
 
-    let active = true;
-
-    Promise.all(Array.from(scopedStoreIds).map((storeId) => getRealOrdersByStore(storeId))).then(
-      (results) => {
-        if (active) setRealOrders(results.flat());
-      },
-    );
-
-    return () => {
-      active = false;
-    };
+    const [orderResults, assignmentResults] = await Promise.all([
+      Promise.all(Array.from(scopedStoreIds).map((storeId) => getRealOrdersByStore(storeId))),
+      Promise.all(Array.from(scopedStoreIds).map((storeId) => getRealAssignmentsForStore(storeId))),
+    ]);
+    setRealOrders(orderResults.flat());
+    setRealAssignments(assignmentResults.flat());
   }, [scopeReady, scopedStoreIds]);
+
+  React.useEffect(() => {
+    refreshRealData();
+  }, [refreshRealData]);
 
   const orders = React.useMemo(() => {
     const merged = new Map<string, Order>();
@@ -144,10 +151,10 @@ export function VendorOrdersClient() {
 
   async function saveStatus(order: Order, status: OrderStatus) {
     let nextOrder = updateOrderStatus(order, status);
+    const zone = deliveryZones.find((item) => item.id === order.deliveryZoneId) ?? deliveryZones[0];
+    const realAssignment = realAssignments.find((item) => item.orderId === order.id);
 
     if (status === "ready_for_delivery" && !order.deliveryAssignmentId) {
-      const zone =
-        deliveryZones.find((item) => item.id === order.deliveryZoneId) ?? deliveryZones[0];
       const assignment = createDeliveryAssignment(order, zone, "Maket Lakay Courier");
       saveDeliveryAssignment(assignment);
       nextOrder = {
@@ -155,6 +162,15 @@ export function VendorOrdersClient() {
         deliveryAssignmentId: assignment.id,
         deliveryZoneId: zone.id,
       };
+
+      if (!realAssignment) {
+        await createRealDeliveryAssignment({
+          orderId: order.id,
+          zoneId: zone.id,
+          courierName: assignment.courierName,
+          courierPhone: assignment.courierPhone,
+        });
+      }
     }
 
     if (status === "out_for_delivery") {
@@ -162,11 +178,26 @@ export function VendorOrdersClient() {
       if (assignment) {
         saveDeliveryAssignment(updateAssignmentStatus(assignment, "in_transit"));
       }
+      if (realAssignment) {
+        await updateRealAssignmentStatus(realAssignment.id, "in_transit");
+      }
+    }
+
+    if (status === "delivered" && realAssignment) {
+      await updateRealAssignmentStatus(realAssignment.id, "completed");
+      await createRealProofOfDelivery({
+        orderId: order.id,
+        assignmentId: realAssignment.id,
+        recipientName: getCustomer(order),
+        method: "code",
+        note: `Proof captured for ${getCustomer(order)}.`,
+      });
     }
 
     saveLocalOrder(nextOrder);
     saveCustomerNotification(createCustomerNotification(nextOrder, status));
     const realResult = await updateRealOrderStatus(order.id, status);
+    await refreshRealData();
 
     if (!realResult.ok) {
       toast({
@@ -195,7 +226,7 @@ export function VendorOrdersClient() {
         </p>
         <h1 className="mt-2 text-3xl font-black tracking-normal">Order management</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-          Search, filter, inspect, and update vendor orders without touching a backend.
+          Search, filter, inspect, and update vendor orders, delivery assignments, and proof of delivery.
         </p>
       </section>
 

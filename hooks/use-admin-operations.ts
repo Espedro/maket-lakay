@@ -14,6 +14,16 @@ import {
   type DeliveryZoneInput,
 } from "@/lib/admin-operations";
 import { getRealDeliveryZones, saveRealDeliveryZone, setRealDeliveryZoneActive } from "@/services/delivery";
+import {
+  getRealCommissionSettings,
+  updateRealDefaultCommissionRate,
+  updateRealVendorCommissionRate,
+} from "@/services/commissions";
+import {
+  getAllRealOrders,
+  updateRealOrderRefundFlag,
+  updateRealOrderReviewFlag,
+} from "@/services/orders";
 
 const STORAGE_EVENT = "maket-lakay-admin-operations-storage";
 
@@ -68,8 +78,60 @@ export function useAdminOperations() {
     };
   }, [saveState]);
 
+  React.useEffect(() => {
+    let active = true;
+
+    getRealCommissionSettings().then((realSettings) => {
+      if (!active || !realSettings) return;
+
+      const nextState = readState();
+      nextState.commissionSettings = {
+        ...nextState.commissionSettings,
+        defaultRate: realSettings.defaultRate,
+        vendorRates: {
+          ...nextState.commissionSettings.vendorRates,
+          ...realSettings.vendorRates,
+        },
+      };
+      saveState(nextState);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [saveState]);
+
+  React.useEffect(() => {
+    let active = true;
+
+    getAllRealOrders().then((realOrders) => {
+      if (!active) return;
+
+      const flaggedOrders = realOrders.filter(
+        (order) => order.markedForReview || order.refundIssued,
+      );
+
+      if (flaggedOrders.length === 0) return;
+
+      const nextState = readState();
+      flaggedOrders.forEach((order) => {
+        nextState.orderFlags[order.id] = {
+          orderId: order.id,
+          markedForReview: order.markedForReview ?? nextState.orderFlags[order.id]?.markedForReview ?? false,
+          refundIssued: order.refundIssued ?? nextState.orderFlags[order.id]?.refundIssued ?? false,
+          updatedAt: nextState.orderFlags[order.id]?.updatedAt ?? new Date().toISOString(),
+        };
+      });
+      saveState(nextState);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [saveState]);
+
   const markOrderForReview = React.useCallback(
-    (orderId: string) => {
+    async (orderId: string) => {
       const nextState = readState();
       nextState.orderFlags[orderId] = {
         ...(nextState.orderFlags[orderId] ?? { orderId, refundIssued: false }),
@@ -90,16 +152,28 @@ export function useAdminOperations() {
         newValue: "marked_for_review",
         severity: "warning",
       });
+
+      const realResult = await updateRealOrderReviewFlag(orderId, true);
+
+      if (!realResult.ok) {
+        toast({
+          title: "Saved locally, real sync failed",
+          description: realResult.reason ?? `${orderId} could not be flagged in the live order.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Order marked for review",
-        description: `${orderId} was flagged locally for admin review.`,
+        description: `${orderId} was flagged for admin review.`,
       });
     },
     [saveState],
   );
 
   const markRefundIssued = React.useCallback(
-    (orderId: string) => {
+    async (orderId: string) => {
       const nextState = readState();
       nextState.orderFlags[orderId] = {
         ...(nextState.orderFlags[orderId] ?? { orderId, markedForReview: false }),
@@ -116,16 +190,26 @@ export function useAdminOperations() {
         entityType: "order",
         entityId: orderId,
         entityLabel: orderId,
-        summary: "Simulated refund was issued for this order.",
+        summary: "Refund was issued for this order.",
         newValue: "refund_issued",
         severity: "critical",
       });
+
+      const realResult = await updateRealOrderRefundFlag(orderId, true);
+
+      if (!realResult.ok) {
+        toast({
+          title: "Saved locally, real sync failed",
+          description: realResult.reason ?? `${orderId} refund flag could not be synced.`,
+          variant: "destructive",
+        });
+      }
     },
     [saveState],
   );
 
   const updateDefaultCommissionRate = React.useCallback(
-    (rate: number) => {
+    async (rate: number) => {
       const nextState = readState();
       const oldRate = nextState.commissionSettings.defaultRate;
       nextState.commissionSettings.defaultRate = rate;
@@ -135,7 +219,7 @@ export function useAdminOperations() {
           vendorId: "marketplace",
           vendorName: "Marketplace default",
           rate,
-          note: "Default commission rate updated locally.",
+          note: "Default commission rate updated.",
           createdAt: new Date().toISOString(),
         },
         ...nextState.commissionSettings.history,
@@ -154,6 +238,18 @@ export function useAdminOperations() {
         newValue: `${rate}%`,
         severity: "warning",
       });
+
+      const realResult = await updateRealDefaultCommissionRate(rate);
+
+      if (!realResult.ok) {
+        toast({
+          title: "Saved locally, real sync failed",
+          description: realResult.reason ?? "Default commission could not be synced.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Commission setting saved",
         description: `Default commission changed to ${rate}%.`,
@@ -163,7 +259,7 @@ export function useAdminOperations() {
   );
 
   const updateVendorCommissionRate = React.useCallback(
-    (vendorId: string, vendorName: string, rate: number) => {
+    async (vendorId: string, vendorName: string, rate: number) => {
       const nextState = readState();
       const oldRate =
         nextState.commissionSettings.vendorRates[vendorId] ??
@@ -175,7 +271,7 @@ export function useAdminOperations() {
           vendorId,
           vendorName,
           rate,
-          note: "Vendor-specific commission rate updated locally.",
+          note: "Vendor-specific commission rate updated.",
           createdAt: new Date().toISOString(),
         },
         ...nextState.commissionSettings.history,
@@ -194,6 +290,18 @@ export function useAdminOperations() {
         newValue: `${rate}%`,
         severity: "warning",
       });
+
+      const realResult = await updateRealVendorCommissionRate(vendorId, rate);
+
+      if (!realResult.ok) {
+        toast({
+          title: "Saved locally, real sync failed",
+          description: realResult.reason ?? `${vendorName} commission could not be synced.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Vendor commission saved",
         description: `${vendorName} commission changed to ${rate}%.`,

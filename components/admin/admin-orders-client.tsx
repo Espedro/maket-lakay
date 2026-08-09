@@ -209,7 +209,7 @@ export function AdminOrdersClient() {
     setDateFilter("all");
   }
 
-  function issueRefund(order: Order) {
+  async function issueRefund(order: Order) {
     const payment = [...localPaymentRecords, ...paymentRecords].find(
       (record) => record.orderId === order.id,
     );
@@ -221,14 +221,14 @@ export function AdminOrdersClient() {
       amount: order.total,
       currency: order.currency,
       status: "processed",
-      reason: "Admin simulated refund from order management.",
+      reason: "Admin refund from order management.",
       createdAt: new Date().toISOString(),
     };
 
     saveRefundRecord(refundRecord);
-    markRefundIssued(order.id);
+    await markRefundIssued(order.id);
     toast({
-      title: "Simulated refund issued",
+      title: "Refund issued",
       description: `${formatCurrency(order.total, order.currency)} refund recorded for ${order.id}.`,
     });
   }
@@ -237,7 +237,7 @@ export function AdminOrdersClient() {
     if (!pendingAction) return;
 
     if (pendingAction.type === "review") {
-      markOrderForReview(pendingAction.order.id);
+      await markOrderForReview(pendingAction.order.id);
     }
 
     if (pendingAction.type === "cancel") {
@@ -273,7 +273,7 @@ export function AdminOrdersClient() {
     }
 
     if (pendingAction.type === "refund") {
-      issueRefund(pendingAction.order);
+      await issueRefund(pendingAction.order);
     }
 
     if (pendingAction.type === "delivery") {
@@ -384,7 +384,7 @@ export function AdminOrdersClient() {
           </p>
           <h1 className="mt-2 text-3xl font-black tracking-normal">Admin orders</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Track marketplace orders, payment state, delivery state, reviews, and simulated refunds.
+            Track marketplace orders, payment state, delivery state, reviews, and refunds.
           </p>
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_190px_200px_220px_190px]">
@@ -569,13 +569,13 @@ export function AdminOrdersClient() {
         <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>Confirm admin order action</DialogTitle>
-            <DialogDescription>This updates local order data only.</DialogDescription>
+            <DialogDescription>This updates the real order record.</DialogDescription>
           </DialogHeader>
           <div className="border bg-muted/30 p-4 text-sm">
             {pendingAction?.type === "cancel"
               ? `Cancel ${pendingAction.order.id}?`
               : pendingAction?.type === "refund"
-                ? `Issue a simulated refund for ${pendingAction.order.id}?`
+                ? `Issue a refund for ${pendingAction.order.id}?`
                 : pendingAction?.type === "delivery"
                   ? `Update ${pendingAction.order.id} to ${ORDER_STATUS_LABELS[pendingAction.status]}?`
                   : `Mark ${pendingAction?.order.id} for review?`}

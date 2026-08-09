@@ -590,7 +590,7 @@ export function CommissionManagementClient() {
         <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>Confirm commission setting</DialogTitle>
-            <DialogDescription>This saves simulated commission settings in localStorage.</DialogDescription>
+            <DialogDescription>This updates the real commission rate.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 border bg-muted/30 p-4 text-sm">
             <p className="font-semibold">

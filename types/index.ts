@@ -246,6 +246,8 @@ export interface Order {
   estimatedDeliveryAt?: string;
   proofOfDeliveryId?: string;
   statusHistory?: OrderStatusEvent[];
+  markedForReview?: boolean;
+  refundIssued?: boolean;
 }
 
 export interface DeliveryZone {
