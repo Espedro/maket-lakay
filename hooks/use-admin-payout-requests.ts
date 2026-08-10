@@ -4,60 +4,36 @@ import * as React from "react";
 
 import { toast } from "@/hooks/use-toast";
 import { addAuditLogEntry } from "@/lib/audit-log";
-import { readLocalJson, writeLocalJson } from "@/lib/local-storage";
-import {
-  defaultPayoutRequests,
-  type PayoutRequest,
-  type PayoutStatus,
-  VENDOR_COMMERCE_STORAGE_EVENT,
-  VENDOR_PAYOUT_REQUESTS_KEY,
-} from "@/lib/vendor-commerce";
-
-function readPayoutRequests() {
-  return readLocalJson<PayoutRequest[]>(
-    VENDOR_PAYOUT_REQUESTS_KEY,
-    defaultPayoutRequests,
-  );
-}
-
-function writePayoutRequests(requests: PayoutRequest[]) {
-  writeLocalJson(
-    VENDOR_PAYOUT_REQUESTS_KEY,
-    requests,
-    VENDOR_COMMERCE_STORAGE_EVENT,
-  );
-}
+import type { PayoutRequest, PayoutStatus } from "@/lib/vendor-commerce";
+import { getAllRealPayoutRequests, updateRealPayoutRequestStatus } from "@/services/vendor-commerce";
 
 export function useAdminPayoutRequests() {
   const [isReady, setIsReady] = React.useState(false);
   const [payoutRequests, setPayoutRequests] = React.useState<PayoutRequest[]>([]);
 
-  const refresh = React.useCallback(() => {
-    setPayoutRequests(readPayoutRequests());
+  const refresh = React.useCallback(async () => {
+    setPayoutRequests(await getAllRealPayoutRequests());
     setIsReady(true);
   }, []);
 
   React.useEffect(() => {
     refresh();
-    window.addEventListener("storage", refresh);
-    window.addEventListener(VENDOR_COMMERCE_STORAGE_EVENT, refresh);
-
-    return () => {
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener(VENDOR_COMMERCE_STORAGE_EVENT, refresh);
-    };
   }, [refresh]);
 
   const updatePayoutStatus = React.useCallback(
-    (requestId: string, status: PayoutStatus) => {
-      const currentRequests = readPayoutRequests();
-      const oldRequest = currentRequests.find((request) => request.id === requestId);
-      const nextRequests = currentRequests.map((request) =>
-        request.id === requestId ? { ...request, status } : request,
-      );
+    async (requestId: string, status: PayoutStatus) => {
+      const oldRequest = payoutRequests.find((request) => request.id === requestId);
+      const result = await updateRealPayoutRequestStatus(requestId, status);
 
-      writePayoutRequests(nextRequests);
-      setPayoutRequests(nextRequests);
+      if (!result.ok) {
+        toast({
+          title: "Could not update payout request",
+          description: result.reason,
+          variant: "destructive",
+        });
+        return;
+      }
+
       addAuditLogEntry({
         actorId: "admin-ops",
         actorName: "Maket Admin",
@@ -75,8 +51,9 @@ export function useAdminPayoutRequests() {
         title: "Payout request updated",
         description: `Status changed to ${status}.`,
       });
+      await refresh();
     },
-    [],
+    [payoutRequests, refresh],
   );
 
   return {

@@ -134,7 +134,7 @@ export function PayoutRequestsClient() {
             </p>
             <h1 className="mt-2 text-3xl font-black tracking-normal">Payout requests</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Submit simulated payout requests and review payout history.
+              Submit payout requests and review payout history.
             </p>
           </div>
           <select

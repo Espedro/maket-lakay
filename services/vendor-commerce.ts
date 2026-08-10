@@ -69,6 +69,35 @@ export async function createRealPayoutRequest(request: PayoutRequest, storeId: s
   return { ok: true as const };
 }
 
+/** Admin-only (RLS). Relies on the admin RLS bypass to see every payout request. */
+export async function getAllRealPayoutRequests(): Promise<PayoutRequest[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("payout_requests")
+    .select("*")
+    .order("requested_at", { ascending: false });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data.map(mapPayoutRequestRow);
+}
+
+export async function updateRealPayoutRequestStatus(requestId: string, status: PayoutRequest["status"]) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("payout_requests")
+    .update({ status })
+    .eq("id", requestId);
+
+  if (error) {
+    return { ok: false as const, reason: error.message };
+  }
+
+  return { ok: true as const };
+}
+
 export interface RealWalletSummary {
   availableBalance: number;
   pendingBalance: number;

@@ -83,10 +83,10 @@ export function AdminPayoutRequestsClient() {
     .filter((request) => request.status === "paid")
     .reduce((sum, request) => sum + request.amount, 0);
 
-  function confirmAction() {
+  async function confirmAction() {
     if (!pendingAction) return;
 
-    updatePayoutStatus(pendingAction.request.id, pendingAction.status);
+    await updatePayoutStatus(pendingAction.request.id, pendingAction.status);
     setPendingAction(null);
   }
 
@@ -107,7 +107,7 @@ export function AdminPayoutRequestsClient() {
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               Review vendor payout requests, payout methods, account labels, and
-              simulated payout status updates.
+              payout status updates.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-[280px_180px]">
@@ -229,9 +229,7 @@ export function AdminPayoutRequestsClient() {
         <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>Update payout request</DialogTitle>
-            <DialogDescription>
-              This updates the payout request status in localStorage only.
-            </DialogDescription>
+            <DialogDescription>This updates the real payout request status.</DialogDescription>
           </DialogHeader>
           <div className="border bg-muted/30 p-4 text-sm leading-6">
             Set {pendingAction?.request.id} to{" "}

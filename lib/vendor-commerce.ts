@@ -1,8 +1,6 @@
 import type { CurrencyCode } from "@/types";
 
 export const VENDOR_PROMOTIONS_KEY = "maket-lakay-vendor-promotions";
-export const VENDOR_PAYOUT_REQUESTS_KEY = "maket-lakay-vendor-payout-requests";
-export const VENDOR_COMMERCE_STORAGE_EVENT = "maket-lakay-vendor-commerce-storage";
 
 export type DiscountType = "percentage" | "fixed";
 export type PromotionStatus = "scheduled" | "active" | "paused" | "ended";
@@ -75,27 +73,6 @@ export const defaultVendorPromotions: VendorPromotion[] = [
     orders: 11,
     revenue: 219,
     createdAt: "2026-07-18T09:30:00Z",
-  },
-];
-
-export const defaultPayoutRequests: PayoutRequest[] = [
-  {
-    id: "payout-1001",
-    method: "MonCash",
-    amount: 125,
-    currency: "USD",
-    accountLabel: "Nadine MonCash wallet",
-    status: "processing",
-    requestedAt: "2026-07-15T10:00:00Z",
-  },
-  {
-    id: "payout-1000",
-    method: "ACH",
-    amount: 240,
-    currency: "USD",
-    accountLabel: "Sogebank operating account",
-    status: "paid",
-    requestedAt: "2026-07-06T14:15:00Z",
   },
 ];
 
