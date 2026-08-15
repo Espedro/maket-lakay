@@ -7,6 +7,12 @@ import { addAuditLogEntry } from "@/lib/audit-log";
 import { readLocalJson, writeLocalJson } from "@/lib/local-storage";
 import { createClient } from "@/lib/supabase/client";
 import {
+  createRealVendorApplication,
+  getAllRealVendorApplications,
+  getRealVendorApplicationsForApplicant,
+  updateRealVendorApplicationStatus,
+} from "@/services/vendors";
+import {
   ADMIN_MANAGEMENT_KEY,
   getApprovedStoreId,
   getApprovedVendorId,
@@ -139,6 +145,31 @@ export function useAdminManagement() {
     };
   }, [refresh]);
 
+  React.useEffect(() => {
+    let cancelled = false;
+
+    getAllRealVendorApplications()
+      .then((realApplications) => {
+        if (cancelled || realApplications.length === 0) return;
+
+        setState((current) => {
+          const localOnly = current.vendorApplications.filter(
+            (application) => !realApplications.some((real) => real.id === application.id),
+          );
+
+          return { ...current, vendorApplications: [...realApplications, ...localOnly] };
+        });
+      })
+      .catch(() => {
+        // Best-effort: RLS returns an empty list for non-admin sessions, and
+        // any real error here just leaves the local application list as-is.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const saveState = React.useCallback((nextState: AdminManagementState) => {
     writeState(nextState);
     setState(nextState);
@@ -230,40 +261,47 @@ export function useAdminManagement() {
   );
 
   const submitVendorApplication = React.useCallback(
-    (application: Omit<VendorApplication, "id" | "status" | "submittedAt">) => {
-      const nextState = readState();
-      const normalizedEmail = application.email.toLowerCase();
-      const emailExists =
-        nextState.vendorApplications.some(
-          (currentApplication) =>
-            currentApplication.email.toLowerCase() === normalizedEmail &&
-            currentApplication.status !== "rejected",
-        ) ||
-        nextState.users.some((user) => user.email.toLowerCase() === normalizedEmail);
-
-      if (emailExists) {
+    async (application: Omit<VendorApplication, "id" | "status" | "submittedAt">) => {
+      if (!application.applicantProfileId) {
         toast({
-          title: "Application already exists",
-          description: `${application.email} is already connected to a vendor or pending application.`,
+          title: "Application failed",
+          description: "You must be logged in to submit a vendor application.",
           variant: "destructive",
         });
         return null;
       }
 
-      const submittedApplication: VendorApplication = {
-        ...application,
-        id: `vendor-app-${Date.now()}`,
-        status: "submitted",
-        submittedAt: new Date().toISOString(),
-      };
+      const existingApplications = await getRealVendorApplicationsForApplicant(
+        application.applicantProfileId,
+      ).catch(() => [] as VendorApplication[]);
 
-      nextState.vendorApplications = [
-        submittedApplication,
-        ...nextState.vendorApplications,
-      ];
+      if (existingApplications.some((existing) => existing.status !== "rejected")) {
+        toast({
+          title: "Application already exists",
+          description: "This account already has a pending or approved vendor application.",
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      const result = await createRealVendorApplication(application);
+
+      if (!result.ok) {
+        toast({
+          title: "Application failed",
+          description: result.reason ?? "Could not submit the application. Please try again.",
+          variant: "destructive",
+        });
+        return null;
+      }
+
+      const submittedApplication = result.application;
+
+      const nextState = readState();
+      nextState.vendorApplications = [submittedApplication, ...nextState.vendorApplications];
       saveState(nextState);
       addAuditLogEntry({
-        actorId: "customer-jean",
+        actorId: application.applicantProfileId,
         actorName: application.profileDisplayName ?? application.ownerName,
         actorRole: "customer",
         action: "vendor.application_submitted",
@@ -318,21 +356,29 @@ export function useAdminManagement() {
           : application,
       );
 
+      let resolvedVendorId: string | undefined;
+      let resolvedStoreId: string | undefined;
+
       if (status === "approved" && applicationToUpdate) {
-        const vendorId =
+        resolvedVendorId =
           applicationToUpdate.approvedVendorId ??
           realAccountResult?.vendorId ??
           getApprovedVendorId(applicationToUpdate);
-        nextState.vendors[vendorId] = {
+        resolvedStoreId =
+          applicationToUpdate.approvedStoreId ??
+          realAccountResult?.storeId ??
+          getApprovedStoreId(applicationToUpdate);
+
+        nextState.vendors[resolvedVendorId] = {
           verificationStatus: "active",
           storeStatus: "open",
           documentReview: "reviewed",
         };
 
-        if (!nextState.users.some((user) => user.id === `${vendorId}-staff`)) {
+        if (!nextState.users.some((user) => user.id === `${resolvedVendorId}-staff`)) {
           nextState.users = [
             {
-              id: `${vendorId}-staff`,
+              id: `${resolvedVendorId}-staff`,
               name: applicationToUpdate.ownerName,
               email: applicationToUpdate.email,
               role: "vendor_staff",
@@ -346,6 +392,14 @@ export function useAdminManagement() {
       }
 
       saveState(nextState);
+
+      const realStatusResult = await updateRealVendorApplicationStatus(
+        applicationId,
+        status,
+        message,
+        resolvedVendorId,
+        resolvedStoreId,
+      );
       addAuditLogEntry({
         actorId: "admin-ops",
         actorName: "Maket Admin",
@@ -375,6 +429,16 @@ export function useAdminManagement() {
         });
       } else {
         toast({ title: "Application updated", description: message });
+      }
+
+      if (!realStatusResult.ok) {
+        toast({
+          title: "Application status not synced",
+          description:
+            realStatusResult.reason ??
+            "The status was updated locally but could not be synced to the real application record.",
+          variant: "destructive",
+        });
       }
     },
     [saveState],

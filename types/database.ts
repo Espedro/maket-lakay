@@ -1031,6 +1031,208 @@ export type Database = {
           },
         ]
       }
+      vendor_applications: {
+        Row: {
+          accepts_commission: boolean
+          address_details: string | null
+          agrees_to_terms: boolean
+          applicant_profile_id: string
+          approved_store_id: string | null
+          approved_vendor_id: string | null
+          brand_color: string | null
+          business_category: string
+          business_hours: string | null
+          business_name: string
+          business_registration_number: string | null
+          business_type: string
+          city: string
+          commune: string
+          confirms_authentic_products: boolean
+          confirms_fulfillment: boolean
+          cover_preview: string | null
+          delivery_options: string[] | null
+          delivery_zones: string | null
+          department: string
+          description: string
+          email: string
+          email_verified: boolean
+          estimated_product_count: number | null
+          government_id_type: string
+          id: string
+          id_document_preview: string | null
+          id_expiration_date: string | null
+          landmark: string | null
+          logo_preview: string | null
+          owner_name: string
+          payout_account_name: string | null
+          payout_account_number: string | null
+          payout_account_reference: string | null
+          payout_account_type: string | null
+          payout_email: string | null
+          payout_method: string
+          payout_routing_number: string | null
+          payout_stripe_account_id: string | null
+          phone: string
+          phone_verified: boolean
+          pickup_address: string | null
+          processing_time: string | null
+          product_focus: string
+          profile_bio: string | null
+          profile_display_name: string | null
+          refund_policy: string | null
+          return_policy: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          social_links: string | null
+          status: string
+          store_slug: string | null
+          submitted_at: string
+          tax_id: string | null
+          website: string | null
+          years_in_business: number | null
+        }
+        Insert: {
+          accepts_commission?: boolean
+          address_details?: string | null
+          agrees_to_terms?: boolean
+          applicant_profile_id: string
+          approved_store_id?: string | null
+          approved_vendor_id?: string | null
+          brand_color?: string | null
+          business_category: string
+          business_hours?: string | null
+          business_name: string
+          business_registration_number?: string | null
+          business_type?: string
+          city: string
+          commune: string
+          confirms_authentic_products?: boolean
+          confirms_fulfillment?: boolean
+          cover_preview?: string | null
+          delivery_options?: string[] | null
+          delivery_zones?: string | null
+          department: string
+          description: string
+          email: string
+          email_verified?: boolean
+          estimated_product_count?: number | null
+          government_id_type: string
+          id?: string
+          id_document_preview?: string | null
+          id_expiration_date?: string | null
+          landmark?: string | null
+          logo_preview?: string | null
+          owner_name: string
+          payout_account_name?: string | null
+          payout_account_number?: string | null
+          payout_account_reference?: string | null
+          payout_account_type?: string | null
+          payout_email?: string | null
+          payout_method: string
+          payout_routing_number?: string | null
+          payout_stripe_account_id?: string | null
+          phone: string
+          phone_verified?: boolean
+          pickup_address?: string | null
+          processing_time?: string | null
+          product_focus: string
+          profile_bio?: string | null
+          profile_display_name?: string | null
+          refund_policy?: string | null
+          return_policy?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          social_links?: string | null
+          status?: string
+          store_slug?: string | null
+          submitted_at?: string
+          tax_id?: string | null
+          website?: string | null
+          years_in_business?: number | null
+        }
+        Update: {
+          accepts_commission?: boolean
+          address_details?: string | null
+          agrees_to_terms?: boolean
+          applicant_profile_id?: string
+          approved_store_id?: string | null
+          approved_vendor_id?: string | null
+          brand_color?: string | null
+          business_category?: string
+          business_hours?: string | null
+          business_name?: string
+          business_registration_number?: string | null
+          business_type?: string
+          city?: string
+          commune?: string
+          confirms_authentic_products?: boolean
+          confirms_fulfillment?: boolean
+          cover_preview?: string | null
+          delivery_options?: string[] | null
+          delivery_zones?: string | null
+          department?: string
+          description?: string
+          email?: string
+          email_verified?: boolean
+          estimated_product_count?: number | null
+          government_id_type?: string
+          id?: string
+          id_document_preview?: string | null
+          id_expiration_date?: string | null
+          landmark?: string | null
+          logo_preview?: string | null
+          owner_name?: string
+          payout_account_name?: string | null
+          payout_account_number?: string | null
+          payout_account_reference?: string | null
+          payout_account_type?: string | null
+          payout_email?: string | null
+          payout_method?: string
+          payout_routing_number?: string | null
+          payout_stripe_account_id?: string | null
+          phone?: string
+          phone_verified?: boolean
+          pickup_address?: string | null
+          processing_time?: string | null
+          product_focus?: string
+          profile_bio?: string | null
+          profile_display_name?: string | null
+          refund_policy?: string | null
+          return_policy?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          social_links?: string | null
+          status?: string
+          store_slug?: string | null
+          submitted_at?: string
+          tax_id?: string | null
+          website?: string | null
+          years_in_business?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_applications_applicant_profile_id_fkey"
+            columns: ["applicant_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_applications_approved_store_id_fkey"
+            columns: ["approved_store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_applications_approved_vendor_id_fkey"
+            columns: ["approved_vendor_id"]
+            isOneToOne: false
+            referencedRelation: "vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vendor_commission_rates: {
         Row: {
           rate: number

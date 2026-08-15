@@ -1,7 +1,13 @@
 import { orders, stores as mockStores } from "@/data/mock-data";
+import type { VendorApplication, VendorApplicationStatus } from "@/lib/admin-management";
 import type { VendorStoreSettingsInput } from "@/lib/schemas";
 import { createClient } from "@/lib/supabase/client";
-import { mapStoreRow, mapVendorRow } from "@/lib/supabase/mappers";
+import {
+  mapStoreRow,
+  mapVendorApplicationRow,
+  mapVendorRow,
+  toVendorApplicationInsertRow,
+} from "@/lib/supabase/mappers";
 import { createPublicClient } from "@/lib/supabase/public";
 import { getProductsByStore } from "@/services/products";
 import type { Json } from "@/types/database";
@@ -119,6 +125,78 @@ export async function saveRealStoreSettings(storeId: string, settings: VendorSto
     .from("stores")
     .update({ settings: settings as unknown as Json, name: settings.storeName, slug: settings.storeSlug })
     .eq("id", storeId);
+
+  if (error) {
+    return { ok: false as const, reason: error.message };
+  }
+
+  return { ok: true as const };
+}
+
+export async function getAllRealVendorApplications() {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("vendor_applications")
+    .select("*")
+    .order("submitted_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to load vendor applications: ${error.message}`);
+  }
+
+  return (data ?? []).map(mapVendorApplicationRow);
+}
+
+export async function getRealVendorApplicationsForApplicant(applicantProfileId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("vendor_applications")
+    .select("*")
+    .eq("applicant_profile_id", applicantProfileId)
+    .order("submitted_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to load vendor applications: ${error.message}`);
+  }
+
+  return (data ?? []).map(mapVendorApplicationRow);
+}
+
+export async function createRealVendorApplication(
+  application: Omit<VendorApplication, "id" | "status" | "submittedAt">,
+) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("vendor_applications")
+    .insert(toVendorApplicationInsertRow(application))
+    .select("*")
+    .single();
+
+  if (error) {
+    return { ok: false as const, reason: error.message };
+  }
+
+  return { ok: true as const, application: mapVendorApplicationRow(data) };
+}
+
+export async function updateRealVendorApplicationStatus(
+  applicationId: string,
+  status: VendorApplicationStatus,
+  reviewNote: string,
+  approvedVendorId?: string,
+  approvedStoreId?: string,
+) {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("vendor_applications")
+    .update({
+      status,
+      review_note: reviewNote,
+      reviewed_at: status === "approved" || status === "rejected" ? new Date().toISOString() : null,
+      approved_vendor_id: approvedVendorId,
+      approved_store_id: approvedStoreId,
+    })
+    .eq("id", applicationId);
 
   if (error) {
     return { ok: false as const, reason: error.message };

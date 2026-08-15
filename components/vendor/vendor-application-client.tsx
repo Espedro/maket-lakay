@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import * as React from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
 import {
   ArrowLeft,
   ArrowRight,
@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAdminManagement } from "@/hooks/use-admin-management";
 import { useAuth } from "@/hooks/use-auth";
+import { toast } from "@/hooks/use-toast";
 import {
   vendorApplicationSchema,
   type VendorApplicationInput,
@@ -183,7 +184,7 @@ export function VendorApplicationClient() {
     mode: "onTouched",
     defaultValues: {
       businessName: "",
-      businessType: "Business",
+      businessType: "Individual",
       ownerName: "",
       email: "",
       phone: "",
@@ -282,16 +283,34 @@ export function VendorApplicationClient() {
     setCurrentStep((step) => Math.max(step - 1, 0));
   }
 
-  function onSubmit(values: VendorApplicationInput) {
+  async function onSubmit(values: VendorApplicationInput) {
     if (!user) return;
 
-    const application = submitVendorApplication({ ...values, applicantProfileId: user.id });
+    const application = await submitVendorApplication({ ...values, applicantProfileId: user.id });
 
     if (application) {
       setSubmittedApplication(application);
       setCurrentStep(0);
       form.reset();
     }
+  }
+
+  function onInvalid(errors: FieldErrors<VendorApplicationInput>) {
+    const invalidFields = Object.keys(errors) as ApplicationField[];
+    const stepIndex = applicationSteps.findIndex((step) =>
+      step.fields.some((field) => invalidFields.includes(field)),
+    );
+
+    if (stepIndex >= 0) {
+      setCurrentStep(stepIndex);
+    }
+
+    toast({
+      title: "Check the highlighted fields",
+      description:
+        "Some required information is missing or invalid, so the application can't be submitted yet.",
+      variant: "destructive",
+    });
   }
 
   function renderInput(
@@ -441,12 +460,13 @@ export function VendorApplicationClient() {
             <div className="border bg-primary/5 p-4 text-sm leading-6">
               <div className="flex items-center gap-2 font-black">
                 <ShieldCheck className="size-4 text-primary" />
-                Review is local, approval is real
+                Your application reaches our admin team directly
               </div>
               <p className="mt-2 text-muted-foreground">
-                The application itself is tracked in this browser for admin review. Once
-                approved, a real vendor account and store are created on your account —
-                document storage and identity verification are not yet connected.
+                The application is saved to your account and visible to the admin
+                team from any device for review. Once approved, a real vendor account
+                and store are created for you — automated identity verification is
+                not yet connected, so ID review is manual.
               </p>
             </div>
           </div>
@@ -505,7 +525,7 @@ export function VendorApplicationClient() {
                 </div>
               </div>
             ) : (
-              <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)}>
+              <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit, onInvalid)}>
                 <div>
                   <h2 className="text-2xl font-black tracking-normal">
                     Vendor application
@@ -716,9 +736,9 @@ export function VendorApplicationClient() {
                       </div>
 
                       <div className="border bg-white p-4 text-sm leading-6 text-muted-foreground">
-                        This is a frontend-only simulation. ID images and legal
-                        details stay in local state only; no real document or
-                        business registry service is connected.
+                        Your ID image and legal details are saved to your account for
+                        admin review. No automated document or business registry
+                        verification service is connected yet — review is manual.
                       </div>
                     </div>
                   ) : null}
