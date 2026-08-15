@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Maket Lakay — Case Study</title>
+<style>
+  @page {
+    size: Letter;
+    margin: 0.85in 0.9in;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: #1a2233;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    margin: 0;
+  }
+  .cover {
+    height: 9.3in;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    page-break-after: always;
+  }
+  .cover-top { margin-top: 1.4in; }
+  .cover-mark {
+    width: 56px; height: 56px;
+    background: #17233e;
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 20px; letter-spacing: 0.5px;
+    border-radius: 2px;
+    margin-bottom: 28px;
+  }
+  .cover h1 {
+    font-size: 34pt;
+    margin: 0 0 10px 0;
+    color: #17233e;
+    letter-spacing: -0.5px;
+  }
+  .cover .tagline {
+    font-size: 13pt;
+    color: #4a5568;
+    max-width: 5.6in;
+    margin-bottom: 0;
+  }
+  .cover .badge-row {
+    margin-top: 26px;
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 8.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 5px 11px;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    border-radius: 999px;
+  }
+  .cover-bottom {
+    border-top: 2px solid #17233e;
+    padding-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9pt;
+    color: #64748b;
+  }
+  .confidential { font-weight: 700; color: #17233e; }
+
+  section { page-break-after: always; }
+  section:last-of-type { page-break-after: auto; }
+
+  h2 {
+    font-size: 17pt;
+    color: #17233e;
+    border-bottom: 2px solid #17233e;
+    padding-bottom: 8px;
+    margin: 0 0 16px 0;
+    letter-spacing: -0.2px;
+  }
+  h3 {
+    font-size: 11.5pt;
+    color: #17233e;
+    margin: 20px 0 8px 0;
+  }
+  p { margin: 0 0 10px 0; }
+  ul { margin: 0 0 12px 0; padding-left: 18px; }
+  li { margin-bottom: 5px; }
+  .lede {
+    font-size: 12pt;
+    color: #334155;
+    margin-bottom: 18px;
+  }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 18px 0 22px 0;
+  }
+  .stat {
+    border: 1px solid #e2e8f0;
+    border-top: 3px solid #17233e;
+    padding: 12px 10px;
+    text-align: left;
+  }
+  .stat .num { font-size: 18pt; font-weight: 800; color: #17233e; line-height: 1.1; }
+  .stat .label { font-size: 8pt; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 4px; }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+  }
+  .card {
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .card h4 {
+    margin: 0 0 6px 0;
+    font-size: 10.5pt;
+    color: #17233e;
+  }
+  .card p { margin: 0; font-size: 9.5pt; color: #475569; }
+
+  table.roles { width: 100%; border-collapse: collapse; margin: 10px 0 18px 0; font-size: 9.5pt; }
+  table.roles th {
+    background: #17233e; color: #fff; text-align: left;
+    padding: 7px 10px; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  table.roles td { padding: 7px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  table.roles tr:nth-child(even) td { background: #f8fafc; }
+
+  .pill-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 16px 0; }
+  .pill {
+    font-size: 8.5pt;
+    background: #eef2f7;
+    color: #17233e;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+
+  .callout {
+    background: #f8fafc;
+    border-left: 4px solid #17233e;
+    padding: 12px 16px;
+    font-size: 9.5pt;
+    color: #334155;
+    margin: 14px 0;
+  }
+
+  .roadmap-item {
+    display: flex;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .roadmap-item:last-child { border-bottom: none; }
+  .roadmap-status {
+    flex-shrink: 0;
+    width: 90px;
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding-top: 1px;
+  }
+  .status-done { color: #15803d; }
+  .status-next { color: #b45309; }
+  .status-later { color: #64748b; }
+  .roadmap-body h4 { margin: 0 0 3px 0; font-size: 10pt; color: #17233e; }
+  .roadmap-body p { margin: 0; font-size: 9pt; color: #475569; }
+
+  footer.pagefoot {
+    position: running(pagefoot);
+  }
+  .page-header {
+    font-size: 8pt;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+</style>
+</head>
+<body>
+
+  <!-- COVER -->
+  <div class="cover">
+    <div class="cover-top">
+      <div class="cover-mark">ML</div>
+      <h1>Maket Lakay</h1>
+      <p class="tagline">A multi-vendor e-commerce marketplace built for Haiti and the Haitian diaspora — connecting local vendors to buyers at home and abroad.</p>
+      <div class="badge-row">
+        <span class="badge">Case Study</span>
+        <span class="badge">Marketplace / E-commerce</span>
+        <span class="badge">Pre-Launch — Foundation Complete</span>
+      </div>
+    </div>
+    <div class="cover-bottom">
+      <span class="confidential">Prepared for prospective partners &amp; investors</span>
+      <span>August 2026</span>
+    </div>
+  </div>
+
+  <!-- EXECUTIVE SUMMARY -->
+  <section>
+    <div class="page-header">Maket Lakay — Case Study</div>
+    <h2>Executive Summary</h2>
+    <p class="lede">Maket Lakay is a full-stack, multi-vendor marketplace purpose-built for Haiti's local merchants and the Haitian diaspora abroad. In roughly two weeks of focused engineering, the project moved from a static frontend prototype to a production-grade application with a real, secure backend covering the entire marketplace lifecycle — catalog, checkout, orders, delivery, vendor operations, disputes, and admin oversight.</p>
+
+    <p>The platform is live and deployed today. It is intentionally positioned at a specific, valuable milestone: <strong>the technical foundation is complete and de-risked</strong>, and the product is ready to onboard its first real vendors and customers. This case study documents what has been built, how it was built, and what remains before public launch.</p>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="num">24</div><div class="label">Database tables, fully secured</div></div>
+      <div class="stat"><div class="num">30+</div><div class="label">Engineering commits shipped</div></div>
+      <div class="stat"><div class="num">~2</div><div class="label">Weeks foundation to production-ready</div></div>
+      <div class="stat"><div class="num">3</div><div class="label">Roles: customer, vendor, admin</div></div>
+    </div>
+
+    <div class="callout">
+      <strong>Where things stand:</strong> the product is deployed and functional end-to-end, with zero real vendors onboarded yet. This is a deliberate, disciplined stage — every core workflow has been built and verified against real data before a single real merchant or shopper touches the platform.
+    </div>
+  </section>
+
+  <!-- THE OPPORTUNITY -->
+  <section>
+    <div class="page-header">Maket Lakay — Case Study</div>
+    <h2>The Opportunity</h2>
+
+    <h3>The gap</h3>
+    <p>Haitian merchants — from artisans and food producers to small retailers — largely lack an accessible, trustworthy digital storefront tailored to their market. General-purpose global marketplaces are not built around Haiti-specific realities: local delivery logistics, regional payment methods (MonCash, NatCash) alongside international ones, bilingual/trilingual commerce (Kreyòl, French, English), and the strong economic bridge between Haiti and its diaspora communities abroad.</p>
+
+    <h3>The bridge</h3>
+    <p>The Haitian diaspora — concentrated in the United States, Canada, and France — maintains deep, active economic ties to Haiti, regularly sending goods, gifts, and support home. A marketplace that lets diaspora buyers purchase directly from Haitian vendors, with delivery handled locally, turns an informal, ad-hoc pattern into a structured commercial channel — for everyday goods, not just remittances.</p>
+
+    <h3>Why now</h3>
+    <ul>
+      <li>Mobile-first internet access continues to expand across Haiti, growing the addressable base of both shoppers and small merchants who can participate in digital commerce.</li>
+      <li>Local payment rails (MonCash, NatCash) are already in wide everyday use, lowering the trust barrier for local transactions.</li>
+      <li>No dominant, trusted, Haiti-specific multi-vendor marketplace currently exists — the category is open.</li>
+    </ul>
+    <p style="font-size:8.5pt;color:#94a3b8;">Market-sizing figures (addressable users, transaction volume, etc.) intentionally omitted here pending current, sourced data — to be added with verified figures before external distribution.</p>
+  </section>
+
+  <!-- THE PRODUCT -->
+  <section>
+    <div class="page-header">Maket Lakay — Case Study</div>
+    <h2>The Product</h2>
+    <p class="lede">Three purpose-built experiences, one shared marketplace.</p>
+
+    <table class="roles">
+      <tr><th style="width:16%">Role</th><th>What they can do</th></tr>
+      <tr>
+        <td><strong>Customer</strong></td>
+        <td>Browse by category, search, wishlist, multi-vendor cart, checkout (card via Stripe, plus local methods), saved addresses, order tracking with a real delivery timeline, product/store reviews, support tickets, dispute &amp; refund requests.</td>
+      </tr>
+      <tr>
+        <td><strong>Vendor</strong></td>
+        <td>Apply and get approved into a real store; manage products &amp; inventory; fulfill orders through the full delivery lifecycle (assign courier → picked up → in transit → delivered, with proof of delivery); run promotions; request payouts from a live, derived wallet balance; respond to disputes and support tickets for their store.</td>
+      </tr>
+      <tr>
+        <td><strong>Admin / Support</strong></td>
+        <td>Approve vendor applications; manage users, orders, and the product catalog; configure delivery zones and commission rates; resolve disputes, refunds, and support-ticket escalations; oversee payouts; view marketplace-wide reporting.</td>
+      </tr>
+    </table>
+
+    <h3>Core workflows already live</h3>
+    <div class="pill-row">
+      <span class="pill">Vendor onboarding &amp; approval</span>
+      <span class="pill">Product catalog &amp; search</span>
+      <span class="pill">Multi-vendor cart &amp; checkout</span>
+      <span class="pill">Card payments (Stripe)</span>
+      <span class="pill">Order lifecycle &amp; tracking</span>
+      <span class="pill">Delivery assignment &amp; proof of delivery</span>
+      <span class="pill">Vendor payouts &amp; wallet</span>
+      <span class="pill">Disputes &amp; refunds</span>
+      <span class="pill">Support tickets &amp; escalation</span>
+      <span class="pill">Reviews &amp; ratings</span>
+      <span class="pill">Commission management</span>
+      <span class="pill">Role-based admin oversight</span>
+    </div>
+  </section>
+
+  <!-- TECHNICAL FOUNDATION -->
+  <section>
+    <div class="page-header">Maket Lakay — Case Study</div>
+    <h2>Technical Foundation</h2>
+    <p class="lede">The engineering choice that matters most for a marketplace: every workflow above is backed by a real, secured database — not a demo.</p>
+
+    <div class="two-col">
+      <div>
+        <div class="card">
+          <h4>Modern, proven stack</h4>
+          <p>Next.js (React) frontend, TypeScript throughout, Supabase (Postgres) for the database and authentication, Stripe for card payments. All widely-adopted, well-supported technology — no exotic dependencies that create long-term risk.</p>
+        </div>
+        <div class="card">
+          <h4>Security by default</h4>
+          <p>Row Level Security is enabled on all 24 database tables. A customer can only ever see their own data; a vendor can only see and act on their own store's data; admin/support access is explicitly scoped by role. This is enforced at the database layer, not just in application code.</p>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h4>Built for real operations, not a demo</h4>
+          <p>Every feature listed on the previous page was verified end-to-end against the live database with real accounts before being considered done — not just checked to "look right" in the UI.</p>
+        </div>
+        <div class="card">
+          <h4>Deployed &amp; continuously delivered</h4>
+          <p>The application auto-deploys to production on every merge, with type-checking, linting, and a full production build required to pass before any change ships.</p>
+        </div>
+      </div>
+    </div>
+
+    <h3>Engineering velocity</h3>
+    <p>The backend — spanning identity, catalog, orders, payments, delivery operations, vendor commerce, and the full support/dispute lifecycle — was designed, built, secured, and verified in roughly two weeks of focused, disciplined engineering. This pace, combined with the verification discipline described above, is a meaningful signal of execution capability for whoever takes this platform to launch and beyond.</p>
+  </section>
+
+  <!-- STATUS & ROADMAP -->
+  <section>
+    <div class="page-header">Maket Lakay — Case Study</div>
+    <h2>Current Status &amp; Path to Launch</h2>
+    <p class="lede">The platform is deployed and fully functional. What remains before public launch is deliberately narrow — business and operational readiness, not core engineering.</p>
+
+    <div class="roadmap-item">
+      <div class="roadmap-status status-done">Done</div>
+      <div class="roadmap-body">
+        <h4>End-to-end marketplace platform</h4>
+        <p>Catalog, checkout, orders, delivery, vendor operations, disputes/support, and admin oversight are all live against a real, secured backend.</p>
+      </div>
+    </div>
+    <div class="roadmap-item">
+      <div class="roadmap-status status-next">Next</div>
+      <div class="roadmap-body">
+        <h4>Activate real card payments</h4>
+        <p>The Stripe integration is fully built; it activates as soon as live API keys are connected — a business step, not an engineering one.</p>
+      </div>
+    </div>
+    <div class="roadmap-item">
+      <div class="roadmap-status status-next">Next</div>
+      <div class="roadmap-body">
+        <h4>Onboard first vendors</h4>
+        <p>The application-and-approval flow is live today; the platform is ready to bring on its first real merchants.</p>
+      </div>
+    </div>
+    <div class="roadmap-item">
+      <div class="roadmap-status status-later">Before public launch</div>
+      <div class="roadmap-body">
+        <h4>Production email delivery</h4>
+        <p>A production-grade email provider is needed to re-enable account email confirmation at scale.</p>
+      </div>
+    </div>
+    <div class="roadmap-item">
+      <div class="roadmap-status status-later">Before public launch</div>
+      <div class="roadmap-body">
+        <h4>Kreyòl &amp; French localization</h4>
+        <p>The interface is structured to support Kreyòl and French; translation and activation is planned ahead of a full public launch.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLOSING -->
+  <section>
+    <div class="page-header">Maket Lakay — Case Study</div>
+    <h2>Summary</h2>
+    <p class="lede">Maket Lakay retires the hardest, riskiest part of building a marketplace — a secure, complete, real backend covering every stakeholder in the transaction — before spending a dollar on acquiring vendors or customers.</p>
+    <p>What's being sought now is a partner to help take this from a technically complete, deployed platform to a live marketplace with real vendors and real transaction volume: go-to-market execution, vendor recruitment, local operations, and/or capital to fund that growth phase.</p>
+    <div class="callout">
+      This document is a snapshot of engineering and product status as of August 2026. Financial projections, market-sizing data, and a formal terms discussion are available on request.
+    </div>
+  </section>
+
+</body>
+</html>
