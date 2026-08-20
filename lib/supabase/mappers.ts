@@ -45,6 +45,11 @@ export function mapVendorRow(row: Tables<"vendors">): Vendor {
     verificationStatus: row.verification_status,
     rating: Number(row.rating),
     joinedAt: row.joined_at,
+    stripeConnectAccountId: row.stripe_connect_account_id ?? undefined,
+    stripeConnectStatus: row.stripe_connect_status as Vendor["stripeConnectStatus"],
+    stripeConnectDetailsSubmitted: row.stripe_connect_details_submitted,
+    stripeConnectChargesEnabled: row.stripe_connect_charges_enabled,
+    stripeConnectUpdatedAt: row.stripe_connect_updated_at ?? undefined,
   };
 }
 
@@ -198,6 +203,11 @@ export function mapOrderRow(row: OrderRowWithItems): Order {
     estimatedDeliveryAt: row.estimated_delivery_at ?? undefined,
     markedForReview: row.marked_for_review,
     refundIssued: row.refund_issued,
+    stripePaymentIntentId: row.stripe_payment_intent_id ?? undefined,
+    stripeTransferId: row.stripe_transfer_id ?? undefined,
+    stripeTransferStatus: (row.stripe_transfer_status ?? undefined) as Order["stripeTransferStatus"],
+    commission: row.commission != null ? Number(row.commission) : undefined,
+    vendorPayout: row.vendor_payout != null ? Number(row.vendor_payout) : undefined,
     statusHistory: (row.order_tracking_events ?? [])
       .slice()
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())

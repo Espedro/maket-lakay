@@ -135,6 +135,28 @@ export async function getAllRealOrders(): Promise<Order[]> {
 }
 
 /**
+ * Admin-only (RLS). Card-paid orders whose vendor transfer needs attention -
+ * either it failed outright, or it's still "pending" (the transfer step
+ * never completed, e.g. the request crashed between recording the order and
+ * attempting the transfer). This is the v1 safety net standing in for a
+ * proper transfer.failed webhook.
+ */
+export async function getOrdersNeedingTransferReconciliation(): Promise<Order[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(ORDERS_SELECT)
+    .not("stripe_payment_intent_id", "is", null)
+    .in("stripe_transfer_status", ["failed", "pending"]);
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data.map(mapOrderRow);
+}
+
+/**
  * Admin-only (RLS). Silently affects 0 rows if orderId doesn't exist as a
  * real order (e.g. a mock/demo order id) — safe to call as a best-effort
  * dual write alongside the existing local order-status update. Also records

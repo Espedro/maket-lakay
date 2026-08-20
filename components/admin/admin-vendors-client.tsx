@@ -39,8 +39,8 @@ import {
 } from "@/lib/admin-management";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { getAllRealOrders } from "@/services/orders";
-import { getStores as getRealStores } from "@/services/vendors";
-import type { Store } from "@/types";
+import { getStores as getRealStores, getVendors as getRealVendors } from "@/services/vendors";
+import type { Store, Vendor } from "@/types";
 
 type VendorAction = {
   label: string;
@@ -67,6 +67,7 @@ type VendorRow = {
   storeStatus: AdminStoreStatus;
   totalSales: number;
   verificationStatus: AdminVendorStatus;
+  stripeConnectStatus?: string;
   businessCategory?: string;
   categoryIds: string[];
   categoryNames: string[];
@@ -157,7 +158,7 @@ function getApplicationCategoryId(categoryName: string | undefined) {
 
 function statusVariant(status: string) {
   if (["active", "open", "reviewed"].includes(status)) return "success";
-  if (["rejected", "suspended"].includes(status)) return "destructive";
+  if (["rejected", "suspended", "restricted"].includes(status)) return "destructive";
   return "neutral";
 }
 
@@ -199,21 +200,30 @@ export function AdminVendorsClient() {
   const [selectedApplication, setSelectedApplication] = React.useState<VendorRow | null>(null);
   const [realStores, setRealStores] = React.useState<Store[]>([]);
   const [realStoreTotals, setRealStoreTotals] = React.useState<Record<string, number>>({});
+  const [realVendorsById, setRealVendorsById] = React.useState<Record<string, Vendor>>({});
 
   React.useEffect(() => {
     let active = true;
 
-    Promise.all([getRealStores(), getAllRealOrders()]).then(([fetchedStores, realOrders]) => {
-      if (!active) return;
+    Promise.all([getRealStores(), getAllRealOrders(), getRealVendors()]).then(
+      ([fetchedStores, realOrders, fetchedVendors]) => {
+        if (!active) return;
 
-      setRealStores(fetchedStores);
-      setRealStoreTotals(
-        realOrders.reduce<Record<string, number>>((totals, order) => {
-          totals[order.storeId] = (totals[order.storeId] ?? 0) + order.total;
-          return totals;
-        }, {}),
-      );
-    });
+        setRealStores(fetchedStores);
+        setRealStoreTotals(
+          realOrders.reduce<Record<string, number>>((totals, order) => {
+            totals[order.storeId] = (totals[order.storeId] ?? 0) + order.total;
+            return totals;
+          }, {}),
+        );
+        setRealVendorsById(
+          fetchedVendors.reduce<Record<string, Vendor>>((byId, vendor) => {
+            byId[vendor.id] = vendor;
+            return byId;
+          }, {}),
+        );
+      },
+    );
 
     return () => {
       active = false;
@@ -248,6 +258,7 @@ export function AdminVendorsClient() {
         storeStatus: adminState?.storeStatus ?? "paused",
         totalSales: getVendorSales(vendor.id, combinedStoreTotals),
         verificationStatus: adminState?.verificationStatus ?? "pending",
+        stripeConnectStatus: realVendorsById[vendor.id]?.stripeConnectStatus,
       };
     });
     const applicationRows: VendorRow[] = state.vendorApplications.map((application) => {
@@ -288,6 +299,7 @@ export function AdminVendorsClient() {
             : application.status === "rejected"
               ? "rejected"
               : "pending"),
+        stripeConnectStatus: realVendorId ? realVendorsById[realVendorId]?.stripeConnectStatus : undefined,
         businessCategory: application.businessCategory,
         categoryIds: categoryId ? [categoryId] : [],
         categoryNames: [application.businessCategory].filter(Boolean),
@@ -359,6 +371,7 @@ export function AdminVendorsClient() {
     dateAddedFilter,
     query,
     realStores,
+    realVendorsById,
     state.vendorApplications,
     state.vendors,
     statusFilter,
@@ -611,6 +624,14 @@ export function AdminVendorsClient() {
                   : getVendorStores(vendor.id).map((store) => store.name).join(", ") || "No store",
             },
             { label: "Store", value: <Badge variant={statusVariant(vendor.storeStatus)}>{vendor.storeStatus}</Badge> },
+            {
+              label: "Stripe payouts",
+              value: vendor.stripeConnectStatus ? (
+                <Badge variant={statusVariant(vendor.stripeConnectStatus)}>{vendor.stripeConnectStatus}</Badge>
+              ) : (
+                "Not connected"
+              ),
+            },
             { label: "Sales", value: formatCurrency(vendor.totalSales) },
             { label: "Date added", value: formatDate(vendor.joinedAt) },
           ]}
@@ -630,6 +651,7 @@ export function AdminVendorsClient() {
                 <th className="py-3 font-medium">Location</th>
                 <th className="py-3 font-medium">Verification</th>
                 <th className="py-3 font-medium">Store status</th>
+                <th className="py-3 font-medium">Stripe payouts</th>
                 <th className="py-3 font-medium">Total sales</th>
                 <th className="py-3 font-medium">Date added</th>
                 <th className="py-3 font-medium">Actions</th>
@@ -667,6 +689,15 @@ export function AdminVendorsClient() {
                   </td>
                   <td className="py-3">
                     <Badge variant={statusVariant(vendor.storeStatus)}>{vendor.storeStatus}</Badge>
+                  </td>
+                  <td className="py-3">
+                    {vendor.stripeConnectStatus ? (
+                      <Badge variant={statusVariant(vendor.stripeConnectStatus)}>
+                        {vendor.stripeConnectStatus}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Not connected</span>
+                    )}
                   </td>
                   <td className="py-3 font-black">{formatCurrency(vendor.totalSales)}</td>
                   <td className="py-3">{formatDate(vendor.joinedAt)}</td>

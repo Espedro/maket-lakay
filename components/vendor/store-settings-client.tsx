@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Bell,
+  CreditCard,
   ImagePlus,
   MapPin,
   Palette,
@@ -21,11 +22,141 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { categories } from "@/data/mock-data";
+import { toast } from "@/hooks/use-toast";
+import { useVendorConnectStatus } from "@/hooks/use-vendor-connect-status";
 import { useVendorScope } from "@/hooks/use-vendor-scope";
 import { vendorStoreSettingsSchema, type VendorStoreSettingsInput } from "@/lib/schemas";
 import { formatCurrency } from "@/lib/utils";
 import { getDefaultStoreSettings, getStoreAvatarLabel } from "@/lib/vendor-store-settings";
 import { useVendorStoreSettings } from "@/hooks/use-vendor-store-settings";
+
+const connectCountries = [
+  { value: "US", label: "United States" },
+  { value: "CA", label: "Canada" },
+  { value: "FR", label: "France" },
+];
+
+function connectStatusBadgeVariant(status?: string) {
+  if (status === "active") return "success";
+  if (status === "restricted") return "destructive";
+  return "neutral";
+}
+
+function connectStatusLabel(status?: string) {
+  if (status === "active") return "Active";
+  if (status === "restricted") return "Restricted";
+  if (status === "pending") return "Pending";
+  return "Not connected";
+}
+
+function VendorPayoutsPanel({ vendorId }: { vendorId?: string }) {
+  const { vendor, isReady, refresh } = useVendorConnectStatus(vendorId);
+  const [country, setCountry] = React.useState(connectCountries[0].value);
+  const [isStarting, setIsStarting] = React.useState(false);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const stripeParam = params.get("stripe");
+
+    if (stripeParam === "return" || stripeParam === "refresh") {
+      void refresh().then(() => {
+        toast({
+          title: stripeParam === "return" ? "Payout setup updated" : "Payout setup paused",
+          description:
+            stripeParam === "return"
+              ? "We checked your Stripe status and updated it below."
+              : "You can pick up where you left off any time.",
+        });
+      });
+      params.delete("stripe");
+      const nextUrl = params.toString()
+        ? `${window.location.pathname}?${params.toString()}`
+        : window.location.pathname;
+      window.history.replaceState({}, "", nextUrl);
+    }
+  }, [refresh]);
+
+  async function startConnect() {
+    setIsStarting(true);
+
+    try {
+      const response = await fetch("/api/vendor/connect/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ country }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast({
+          title: "Couldn't start payout setup",
+          description: data.error ?? "Something went wrong. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      window.location.href = data.url;
+    } catch {
+      toast({
+        title: "Couldn't start payout setup",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsStarting(false);
+    }
+  }
+
+  const chargesEnabled = Boolean(vendor?.stripeConnectChargesEnabled);
+  const hasAccount = Boolean(vendor?.stripeConnectAccountId);
+
+  return (
+    <section className="border bg-white p-5">
+      <div className="flex items-center gap-2">
+        <CreditCard className="size-5 text-primary" />
+        <h2 className="text-xl font-black">Stripe payouts</h2>
+        {isReady ? (
+          <Badge variant={connectStatusBadgeVariant(vendor?.stripeConnectStatus)}>
+            {connectStatusLabel(vendor?.stripeConnectStatus)}
+          </Badge>
+        ) : null}
+      </div>
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+        Card payments are paid out directly to your own Stripe account. This currently
+        requires a business or bank account in a country Stripe supports (e.g. United
+        States, Canada, France) — not yet Haiti directly.
+      </p>
+      {chargesEnabled ? (
+        <p className="mt-3 text-sm font-semibold text-primary">
+          Your payout account is active — you can receive card payments.
+        </p>
+      ) : (
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          {!hasAccount ? (
+            <label className="grid gap-2 text-sm font-bold">
+              Country of your business/bank account
+              <select
+                className="h-10 border bg-white px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={country}
+                onChange={(event) => setCountry(event.target.value)}
+              >
+                {connectCountries.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <Button type="button" onClick={() => void startConnect()} disabled={isStarting}>
+            {hasAccount ? "Continue setup on Stripe" : "Connect with Stripe"}
+          </Button>
+        </div>
+      )}
+    </section>
+  );
+}
 
 const departments = [
   "Artibonite",
@@ -58,7 +189,7 @@ function slugify(value: string) {
 }
 
 export function StoreSettingsClient() {
-  const { defaultStoreId, isReady: scopeReady, scopedStores } = useVendorScope();
+  const { defaultStoreId, isReady: scopeReady, scopedStores, vendorId } = useVendorScope();
   const [storeId, setStoreId] = React.useState(defaultStoreId);
   const selectedStore = scopedStores.find((store) => store.id === storeId) ?? scopedStores[0];
   const { isReady, saveStoreSettings, settings } = useVendorStoreSettings(storeId, selectedStore);
@@ -101,7 +232,9 @@ export function StoreSettingsClient() {
   }
 
   return (
-    <form className="space-y-6" onSubmit={form.handleSubmit(submitSettings)}>
+    <div className="space-y-6">
+      <VendorPayoutsPanel vendorId={vendorId} />
+      <form className="space-y-6" onSubmit={form.handleSubmit(submitSettings)}>
       <section className="border bg-white p-5">
         <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-end">
           <div>
@@ -389,7 +522,8 @@ export function StoreSettingsClient() {
           </SettingsSection>
         </aside>
       </div>
-    </form>
+      </form>
+    </div>
   );
 }
 

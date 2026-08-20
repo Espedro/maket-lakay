@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { products, vendorWallets } from "@/data/mock-data";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
+import { useVendorConnectStatus } from "@/hooks/use-vendor-connect-status";
 import { useVendorScope } from "@/hooks/use-vendor-scope";
 import { mergeOrders } from "@/lib/orders";
 import { cn, formatCurrency, formatDate } from "@/lib/utils";
@@ -150,7 +151,8 @@ function metricTrend(value: number) {
 
 export function VendorOverviewClient() {
   const { isReady, localOrders } = useMarketplaceStorage();
-  const { defaultStoreId, isReady: scopeReady, scopedStores } = useVendorScope();
+  const { defaultStoreId, isReady: scopeReady, scopedStores, vendorId } = useVendorScope();
+  const { vendor: connectVendor } = useVendorConnectStatus(vendorId);
   const [storeId, setStoreId] = React.useState(defaultStoreId);
   const [rangeId, setRangeId] = React.useState<DateRangeId>("30d");
   const allOrders = React.useMemo(() => mergeOrders(localOrders), [localOrders]);
@@ -187,6 +189,11 @@ export function VendorOverviewClient() {
       label: "Review payout options",
       done: Boolean(wallet),
       href: "/vendor/payout-requests",
+    },
+    {
+      label: "Connect Stripe payouts",
+      done: Boolean(connectVendor?.stripeConnectChargesEnabled),
+      href: "/vendor/settings",
     },
   ];
 
@@ -269,7 +276,7 @@ export function VendorOverviewClient() {
             <Link href="/vendor/settings">Continue setup</Link>
           </Button>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {onboardingItems.map((item) => (
             <Link
               key={item.label}

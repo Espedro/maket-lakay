@@ -398,6 +398,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          commission: number | null
           currency: string
           customer_profile_id: string
           delivery_city: string | null
@@ -409,11 +410,16 @@ export type Database = {
           refund_issued: boolean
           status: Database["public"]["Enums"]["order_status"]
           store_id: string
+          stripe_payment_intent_id: string | null
+          stripe_transfer_id: string | null
+          stripe_transfer_status: string | null
           subtotal: number
           total: number
           tracking_number: string | null
+          vendor_payout: number | null
         }
         Insert: {
+          commission?: number | null
           currency?: string
           customer_profile_id: string
           delivery_city?: string | null
@@ -425,11 +431,16 @@ export type Database = {
           refund_issued?: boolean
           status?: Database["public"]["Enums"]["order_status"]
           store_id: string
+          stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
+          stripe_transfer_status?: string | null
           subtotal: number
           total: number
           tracking_number?: string | null
+          vendor_payout?: number | null
         }
         Update: {
+          commission?: number | null
           currency?: string
           customer_profile_id?: string
           delivery_city?: string | null
@@ -441,9 +452,13 @@ export type Database = {
           refund_issued?: boolean
           status?: Database["public"]["Enums"]["order_status"]
           store_id?: string
+          stripe_payment_intent_id?: string | null
+          stripe_transfer_id?: string | null
+          stripe_transfer_status?: string | null
           subtotal?: number
           total?: number
           tracking_number?: string | null
+          vendor_payout?: number | null
         }
         Relationships: [
           {
@@ -1327,6 +1342,11 @@ export type Database = {
           owner_profile_id: string | null
           phone: string | null
           rating: number
+          stripe_connect_account_id: string | null
+          stripe_connect_charges_enabled: boolean
+          stripe_connect_details_submitted: boolean
+          stripe_connect_status: string
+          stripe_connect_updated_at: string | null
           verification_status: Database["public"]["Enums"]["verification_status"]
         }
         Insert: {
@@ -1340,6 +1360,11 @@ export type Database = {
           owner_profile_id?: string | null
           phone?: string | null
           rating?: number
+          stripe_connect_account_id?: string | null
+          stripe_connect_charges_enabled?: boolean
+          stripe_connect_details_submitted?: boolean
+          stripe_connect_status?: string
+          stripe_connect_updated_at?: string | null
           verification_status?: Database["public"]["Enums"]["verification_status"]
         }
         Update: {
@@ -1353,6 +1378,11 @@ export type Database = {
           owner_profile_id?: string | null
           phone?: string | null
           rating?: number
+          stripe_connect_account_id?: string | null
+          stripe_connect_charges_enabled?: boolean
+          stripe_connect_details_submitted?: boolean
+          stripe_connect_status?: string
+          stripe_connect_updated_at?: string | null
           verification_status?: Database["public"]["Enums"]["verification_status"]
         }
         Relationships: [
@@ -1409,6 +1439,10 @@ export type Database = {
       current_role: {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      set_order_transfer_status: {
+        Args: { order_id: string; transfer_id: string; transfer_status: string }
+        Returns: undefined
       }
     }
     Enums: {

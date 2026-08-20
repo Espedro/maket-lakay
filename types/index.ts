@@ -56,6 +56,8 @@ export interface Category {
   accentColor: string;
 }
 
+export type StripeConnectStatus = "not_started" | "pending" | "active" | "restricted";
+
 export interface Vendor {
   id: string;
   name: string;
@@ -67,6 +69,11 @@ export interface Vendor {
   verificationStatus: VerificationStatus;
   rating: number;
   joinedAt: string;
+  stripeConnectAccountId?: string;
+  stripeConnectStatus?: StripeConnectStatus;
+  stripeConnectDetailsSubmitted?: boolean;
+  stripeConnectChargesEnabled?: boolean;
+  stripeConnectUpdatedAt?: string;
 }
 
 export interface Store {
@@ -248,6 +255,11 @@ export interface Order {
   statusHistory?: OrderStatusEvent[];
   markedForReview?: boolean;
   refundIssued?: boolean;
+  stripePaymentIntentId?: string;
+  stripeTransferId?: string;
+  stripeTransferStatus?: "pending" | "succeeded" | "failed";
+  commission?: number;
+  vendorPayout?: number;
 }
 
 export interface DeliveryZone {

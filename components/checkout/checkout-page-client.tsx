@@ -46,6 +46,7 @@ import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { getRealDeliveryZones } from "@/services/delivery";
 import { createRealOrders } from "@/services/orders";
 import { getRealAddresses, saveRealAddress } from "@/services/users";
+import { getConnectReadinessForStores } from "@/services/vendor-payments";
 import type { CustomerAddress, DeliveryZone, PaymentMethod, PaymentRecord } from "@/types";
 
 type CheckoutStep = "address" | "delivery" | "payment" | "review";
@@ -312,9 +313,34 @@ export function CheckoutPageClient() {
   const cardPaymentRef = React.useRef<CardPaymentHandle>(null);
   const [cardReady, setCardReady] = React.useState(false);
   const [cardClientSecret, setCardClientSecret] = React.useState<string | null>(null);
+  const [connectReadiness, setConnectReadiness] = React.useState<Record<string, boolean>>({});
+  const storeIdsKey = summary.groups.map((group) => group.store.id).sort().join(",");
 
   React.useEffect(() => {
-    if (!stripeConfigured || paymentMethodId !== "card" || total <= 0) {
+    const storeIds = storeIdsKey ? storeIdsKey.split(",") : [];
+
+    if (storeIds.length === 0) {
+      setConnectReadiness({});
+      return;
+    }
+
+    let active = true;
+
+    getConnectReadinessForStores(storeIds).then((readiness) => {
+      if (active) setConnectReadiness(readiness);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [storeIdsKey]);
+
+  const allVendorsCardReady =
+    summary.groups.length > 0 && summary.groups.every((group) => connectReadiness[group.store.id]);
+  const cardPaymentAvailable = stripeConfigured && allVendorsCardReady;
+
+  React.useEffect(() => {
+    if (!cardPaymentAvailable || paymentMethodId !== "card" || total <= 0) {
       setCardClientSecret(null);
       setCardReady(false);
       return;
@@ -353,14 +379,14 @@ export function CheckoutPageClient() {
     return () => {
       active = false;
     };
-  }, [stripeConfigured, paymentMethodId, total]);
+  }, [cardPaymentAvailable, paymentMethodId, total]);
 
   const canPlaceOrder =
     isReady &&
     cart.length > 0 &&
     selectedAddress &&
     summary.stockIssues.length === 0 &&
-    (paymentMethodId !== "card" || (stripeConfigured && cardReady));
+    (paymentMethodId !== "card" || (cardPaymentAvailable && cardReady));
 
   async function createAddress(values: CheckoutAddressInput) {
     if (!user) return;
@@ -455,6 +481,7 @@ export function CheckoutPageClient() {
     };
 
     let payment: PaymentRecord;
+    let cardPaymentIntentId: string | undefined;
 
     if (paymentMethodId === "card") {
       const result = await cardPaymentRef.current?.confirmPayment();
@@ -468,6 +495,8 @@ export function CheckoutPageClient() {
         });
         return;
       }
+
+      cardPaymentIntentId = result.paymentIntentId;
 
       payment = {
         id: `payrec-${Date.now()}`,
@@ -542,30 +571,62 @@ export function CheckoutPageClient() {
       saveCustomerNotification(createCustomerNotification(order, order.status));
     });
 
-    const realOrderResult = await createRealOrders(
-      createdOrders.map((order) => ({
-        id: order.id,
-        customerProfileId: user.id,
-        storeId: order.storeId,
-        status: order.status,
-        currency: order.currency,
-        subtotal: order.subtotal,
-        deliveryFee: order.deliveryFee,
-        total: order.total,
-        placedAt: order.placedAt,
-        deliveryCity: order.deliveryCity,
-        trackingNumber: order.trackingNumber,
-        estimatedDeliveryAt: order.estimatedDeliveryAt,
-        items: order.items,
-      })),
-    );
+    const orderInputs = createdOrders.map((order) => ({
+      id: order.id,
+      storeId: order.storeId,
+      status: order.status,
+      currency: order.currency,
+      subtotal: order.subtotal,
+      deliveryFee: order.deliveryFee,
+      total: order.total,
+      placedAt: order.placedAt,
+      deliveryCity: order.deliveryCity,
+      trackingNumber: order.trackingNumber,
+      estimatedDeliveryAt: order.estimatedDeliveryAt,
+      items: order.items,
+    }));
 
-    if (!realOrderResult.ok) {
-      toast({
-        title: "Order saved locally only",
-        description: realOrderResult.reason ?? "The real order record could not be created.",
-        variant: "destructive",
-      });
+    if (paymentMethodId === "card" && cardPaymentIntentId) {
+      try {
+        const response = await fetch("/api/checkout/finalize-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentIntentId: cardPaymentIntentId, orders: orderInputs }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          toast({
+            title: "Order saved locally only",
+            description: data.error ?? "The real order record could not be created.",
+            variant: "destructive",
+          });
+        } else if (data.transferFailures?.length > 0) {
+          toast({
+            title: "Order placed, one payout needs attention",
+            description: "Your payment succeeded. A vendor payout is being reconciled by our team.",
+            variant: "destructive",
+          });
+        }
+      } catch {
+        toast({
+          title: "Order saved locally only",
+          description: "Could not reach the payment server.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      const realOrderResult = await createRealOrders(
+        orderInputs.map((order) => ({ ...order, customerProfileId: user.id })),
+      );
+
+      if (!realOrderResult.ok) {
+        toast({
+          title: "Order saved locally only",
+          description: realOrderResult.reason ?? "The real order record could not be created.",
+          variant: "destructive",
+        });
+      }
     }
 
     clearCart();
@@ -795,17 +856,22 @@ export function CheckoutPageClient() {
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               {paymentOptions.map((payment) => {
                 const Icon = payment.icon;
+                const disabled = payment.id === "card" && !cardPaymentAvailable;
 
                 return (
                   <label
                     key={payment.id}
-                    className="cursor-pointer border p-4 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                    className={cn(
+                      "cursor-pointer border p-4 has-[:checked]:border-primary has-[:checked]:bg-primary/5",
+                      disabled && "cursor-not-allowed opacity-50",
+                    )}
                   >
                     <input
                       type="radio"
                       name="payment"
                       value={payment.id}
                       checked={paymentMethodId === payment.id}
+                      disabled={disabled}
                       onChange={() => setPaymentMethodId(payment.id)}
                     />
                     <span className="mt-3 flex items-center gap-2 font-black">
@@ -826,6 +892,11 @@ export function CheckoutPageClient() {
                 {!stripeConfigured ? (
                   <p className="mt-3 text-sm text-muted-foreground">
                     Card payments are not configured yet. Choose another payment method for now.
+                  </p>
+                ) : !allVendorsCardReady ? (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    One or more sellers in your cart haven&apos;t finished payment setup yet.
+                    Choose another payment method for now.
                   </p>
                 ) : cardClientSecret && stripePromise ? (
                   <div className="mt-4">
