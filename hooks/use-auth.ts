@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -24,16 +25,32 @@ export interface AuthUser {
 
 export function useAuth() {
   const supabase = React.useMemo(() => createClient(), []);
+  const pathname = usePathname();
   const [user, setUser] = React.useState<AuthUser | null>(null);
   const [isReady, setIsReady] = React.useState(false);
 
   const loadUser = React.useCallback(
     async (userId: string) => {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, name, email, role")
-        .eq("id", userId)
-        .maybeSingle();
+      // The profiles row is created by a database trigger right after
+      // sign-up, which can lag a moment behind the client redirect - retry
+      // a couple of times before concluding there's really no profile,
+      // instead of leaving a freshly-signed-up user stuck looking logged
+      // out until they manually reload.
+      let profile: { id: string; name: string; email: string; role: AppRole } | null = null;
+
+      for (let attempt = 0; attempt < 3 && !profile; attempt += 1) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        const { data } = await supabase
+          .from("profiles")
+          .select("id, name, email, role")
+          .eq("id", userId)
+          .maybeSingle();
+
+        profile = data;
+      }
 
       if (!profile) {
         setUser(null);
@@ -80,22 +97,29 @@ export function useAuth() {
     [supabase],
   );
 
+  const checkSession = React.useCallback(
+    (active: { current: boolean }) => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!active.current) return;
+
+        if (session?.user) {
+          loadUser(session.user.id);
+        } else {
+          setUser(null);
+          setIsReady(true);
+        }
+      });
+    },
+    [supabase, loadUser],
+  );
+
   React.useEffect(() => {
-    let active = true;
+    const active = { current: true };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!active) return;
-
-      if (session?.user) {
-        loadUser(session.user.id);
-      } else {
-        setUser(null);
-        setIsReady(true);
-      }
-    });
+    checkSession(active);
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!active) return;
+      if (!active.current) return;
 
       if (session?.user) {
         loadUser(session.user.id);
@@ -106,10 +130,33 @@ export function useAuth() {
     });
 
     return () => {
-      active = false;
+      active.current = false;
       listener.subscription.unsubscribe();
     };
-  }, [supabase, loadUser]);
+  }, [supabase, loadUser, checkSession]);
+
+  // Sign-up/sign-in run as Next.js Server Actions, which set the session
+  // cookie server-side - the client SDK's onAuthStateChange listener never
+  // fires for that, since it only observes auth calls made through the
+  // client SDK itself. An already-mounted useAuth() instance (like the
+  // site header, which persists across the post-auth redirect instead of
+  // remounting) would otherwise keep showing "logged out" until the user
+  // manually reloads. Re-checking whenever the route changes catches the
+  // post-redirect session on every mounted instance, not just fresh ones.
+  const isFirstPathnameRun = React.useRef(true);
+
+  React.useEffect(() => {
+    if (isFirstPathnameRun.current) {
+      isFirstPathnameRun.current = false;
+      return;
+    }
+
+    const active = { current: true };
+    checkSession(active);
+    return () => {
+      active.current = false;
+    };
+  }, [pathname, checkSession]);
 
   const signOut = React.useCallback(async () => {
     await supabase.auth.signOut();

@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Maket Lakay — Application Flow</title>
+<style>
+  @page {
+    size: Letter;
+    margin: 20mm 18mm 22mm 18mm;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: #1a2233;
+    line-height: 1.55;
+    font-size: 10.5pt;
+  }
+  .cover {
+    height: 235mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    page-break-after: always;
+  }
+  .cover .eyebrow {
+    color: #17233e;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 10pt;
+    margin-bottom: 14px;
+  }
+  .cover h1 {
+    font-size: 34pt;
+    margin: 0 0 10px 0;
+    color: #0d1526;
+  }
+  .cover .subtitle {
+    font-size: 13pt;
+    color: #4a5468;
+    max-width: 420px;
+    margin-bottom: 40px;
+  }
+  .cover .meta {
+    border-top: 2px solid #17233e;
+    padding-top: 14px;
+    font-size: 9.5pt;
+    color: #5a6478;
+  }
+  .cover .badge {
+    display: inline-block;
+    background: #17233e;
+    color: #fff;
+    padding: 4px 12px;
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  h1 { font-size: 20pt; color: #0d1526; margin: 0 0 4px 0; }
+  h2 {
+    font-size: 14pt;
+    color: #17233e;
+    margin: 26px 0 10px 0;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #17233e;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 11.5pt;
+    color: #17233e;
+    margin: 16px 0 6px 0;
+    page-break-after: avoid;
+  }
+  p { margin: 0 0 8px 0; }
+  ul, ol { margin: 4px 0 10px 0; padding-left: 20px; }
+  li { margin-bottom: 4px; }
+  .section { page-break-inside: avoid; }
+  .role-badge {
+    display: inline-block;
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 2px;
+    margin-bottom: 8px;
+  }
+  .role-customer { background: #e6f0ff; color: #1a4fa3; }
+  .role-vendor { background: #fff2e0; color: #a35c1a; }
+  .role-admin { background: #f0e6ff; color: #5c1aa3; }
+  .role-system { background: #e6f7ee; color: #1a7a4a; }
+  .flow-step {
+    border-left: 3px solid #d8dce6;
+    padding: 4px 0 4px 14px;
+    margin-bottom: 10px;
+  }
+  .flow-step .num {
+    display: inline-block;
+    font-weight: 700;
+    color: #17233e;
+    margin-right: 6px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 14px 0;
+    font-size: 9.5pt;
+  }
+  th, td {
+    text-align: left;
+    padding: 6px 8px;
+    border: 1px solid #d8dce6;
+    vertical-align: top;
+  }
+  th { background: #f2f4f8; font-weight: 700; color: #17233e; }
+  .note {
+    background: #f7f4e9;
+    border-left: 3px solid #c9a94a;
+    padding: 8px 12px;
+    font-size: 9.5pt;
+    margin: 10px 0;
+  }
+  .status-live { color: #1a7a4a; font-weight: 700; }
+  .status-off { color: #a33; font-weight: 700; }
+  .status-partial { color: #a35c1a; font-weight: 700; }
+  .toc { column-count: 2; column-gap: 30px; font-size: 10pt; }
+  .toc a { color: #17233e; text-decoration: none; }
+  .toc li { margin-bottom: 6px; }
+  code {
+    background: #f2f4f8;
+    padding: 1px 5px;
+    border-radius: 2px;
+    font-size: 9pt;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .diagram {
+    background: #f7f8fa;
+    border: 1px solid #d8dce6;
+    padding: 14px;
+    font-size: 9.5pt;
+    margin: 10px 0;
+  }
+  .diagram .arrow { color: #8a93a8; margin: 0 6px; }
+  .footer-note { font-size: 8.5pt; color: #8a93a8; margin-top: 30px; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="badge">Application Reference</div>
+  <div class="eyebrow">Maket Lakay</div>
+  <h1>Application Flow</h1>
+  <div class="subtitle">
+    A complete walkthrough of how customers, vendors, and administrators move
+    through the platform — including the Stripe Connect payment flow.
+  </div>
+  <div class="meta">
+    Multi-vendor marketplace for Haiti and the Haitian diaspora<br/>
+    Next.js · TypeScript · Supabase · Stripe Connect<br/>
+    Prepared 2026-08-21
+  </div>
+</div>
+
+<h1>Contents</h1>
+<ul class="toc">
+  <li><a href="#overview">1. Overview</a></li>
+  <li><a href="#customer">2. Customer Flow</a></li>
+  <li><a href="#vendor">3. Vendor Flow</a></li>
+  <li><a href="#admin">4. Admin Flow</a></li>
+  <li><a href="#payments">5. Payment Flow (Stripe Connect)</a></li>
+  <li><a href="#roles">6. Roles &amp; Access</a></li>
+  <li><a href="#status">7. Current Status</a></li>
+</ul>
+
+<h2 id="overview">1. Overview</h2>
+<p>
+  Maket Lakay is a multi-vendor e-commerce marketplace connecting independent
+  sellers — based in Haiti and across the Haitian diaspora — with customers
+  through a single storefront. The platform handles checkout, order
+  management, delivery coordination, and customer support centrally, while
+  each vendor manages their own products and store.
+</p>
+<p>
+  Three roles drive the platform: <strong>customers</strong> who browse and
+  buy, <strong>vendors</strong> who list and fulfill products, and
+  <strong>admin/support staff</strong> who approve vendors, moderate content,
+  and resolve issues. A fourth actor, <strong>Stripe</strong>, handles
+  identity verification and payment settlement for real card transactions.
+</p>
+
+<h2 id="customer">2. Customer Flow</h2>
+
+<h3>2.1 Discovery &amp; Browsing</h3>
+<div class="flow-step"><span class="num">1.</span> Customer lands on the homepage — trending, new arrival, recommended, and deal sections pull from the live product catalog.</div>
+<div class="flow-step"><span class="num">2.</span> Browses by category, searches by keyword, or visits a specific vendor's store page.</div>
+<div class="flow-step"><span class="num">3.</span> Views a product detail page: description, price, stock, reviews, related products, and the selling store's profile.</div>
+
+<h3>2.2 Account &amp; Sign-up</h3>
+<div class="flow-step"><span class="num">1.</span> Sign-up requires only name, email, and password. A <code>profiles</code> row (role: <em>customer</em> by default) is created automatically.</div>
+<div class="flow-step"><span class="num">2.</span> Signed-in customers get a persistent account area: saved addresses, wishlist, order history, and submitted reviews.</div>
+
+<h3>2.3 Cart &amp; Checkout</h3>
+<table>
+  <tr><th>Step</th><th>What happens</th></tr>
+  <tr><td>Add to cart</td><td>Items are grouped automatically by which vendor/store sells them.</td></tr>
+  <tr><td>Delivery address</td><td>Customer selects a saved address or adds a new one.</td></tr>
+  <tr><td>Delivery method</td><td>Standard, Express, or Pickup — fee and ETA vary by real delivery-zone data.</td></tr>
+  <tr><td>Payment method</td><td>Card (Stripe), MonCash, NatCash, Bank Transfer, or a declined-test option for previewing failure handling.</td></tr>
+  <tr><td>Order review</td><td>Final confirmation of address, delivery method, payment method, and per-vendor line items.</td></tr>
+  <tr><td>Place order</td><td>Payment is confirmed, then one order is created <em>per vendor</em> in the cart (a single checkout can produce several orders if it spans multiple sellers).</td></tr>
+</table>
+<div class="note">
+  <strong>Card payments are currently disabled platform-wide</strong> while
+  the account transitions to Stripe Connect (see Section 5). MonCash,
+  NatCash, Bank Transfer, and the declined-test option remain fully
+  functional simulations.
+</div>
+
+<h3>2.4 Post-purchase</h3>
+<div class="flow-step"><span class="num">1.</span> Order confirmation page, then live order tracking with a status timeline (pending → confirmed → processing → ready for delivery → out for delivery → delivered).</div>
+<div class="flow-step"><span class="num">2.</span> Customer can message support, open a dispute, or request a refund tied to a specific order.</div>
+<div class="flow-step"><span class="num">3.</span> After delivery, customer can leave a product review and a store review.</div>
+
+<h2 id="vendor">3. Vendor Flow</h2>
+
+<h3>3.1 Becoming a Vendor</h3>
+<div class="flow-step"><span class="num">1.</span> A signed-in customer applies at <code>/sell</code> — a multi-step form (seller identity, legal/ID details, store profile, payout preferences).</div>
+<div class="flow-step"><span class="num">2.</span> The application is reviewed by an admin at <code>/admin/vendors</code>.</div>
+<div class="flow-step"><span class="num">3.</span> On approval, a real vendor account and store are created automatically, and the applicant's role is promoted to <em>vendor</em>.</div>
+
+<h3>3.2 Vendor Dashboard</h3>
+<table>
+  <tr><th>Area</th><th>Purpose</th></tr>
+  <tr><td>Overview</td><td>Sales, orders, ratings, and a setup checklist (store approved, first product added, delivery preferences, payout review, Stripe Connect).</td></tr>
+  <tr><td>Products &amp; Inventory</td><td>Create/edit listings, manage stock levels, track low-stock alerts.</td></tr>
+  <tr><td>Orders</td><td>View incoming orders, move them through the delivery workflow (confirm → process → ship → deliver), which also creates real delivery-assignment and tracking records.</td></tr>
+  <tr><td>Promotions</td><td>Create discount campaigns scoped to the vendor's own products.</td></tr>
+  <tr><td>Earnings &amp; Wallet</td><td>A derived (not manually edited) balance: lifetime sales, commission owed, pending vs. available balance.</td></tr>
+  <tr><td>Payout Requests</td><td>Vendor requests a payout from their available balance; an admin approves, processes, or rejects it.</td></tr>
+  <tr><td>Store Settings</td><td>Storefront details, branding, delivery preferences, policies — and the Stripe Connect payout connection (Section 5).</td></tr>
+  <tr><td>Disputes &amp; Reviews</td><td>Respond to customer disputes and view/reply to product &amp; store reviews.</td></tr>
+</table>
+
+<h2 id="admin">4. Admin Flow</h2>
+<table>
+  <tr><th>Area</th><th>Purpose</th></tr>
+  <tr><td>Vendors</td><td>Review and approve/reject applications; manage vendor status (active/suspended); view Stripe Connect payout status per vendor.</td></tr>
+  <tr><td>Products</td><td>Moderate listings platform-wide.</td></tr>
+  <tr><td>Orders</td><td>Oversee every order regardless of vendor; change status; flag for review; issue refunds.</td></tr>
+  <tr><td>Commissions</td><td>Set the default commission rate and per-vendor overrides.</td></tr>
+  <tr><td>Delivery Zones</td><td>Configure delivery fees and estimated delivery times by region — feeds directly into what customers are charged at checkout.</td></tr>
+  <tr><td>Support</td><td>The shared workbench for support tickets, disputes, and refund requests across all roles; also handles escalations.</td></tr>
+  <tr><td>Payout Requests</td><td>Approve, process, or reject vendor payout requests.</td></tr>
+  <tr><td>Payout Reconciliation <em>(new)</em></td><td>Lists any card-paid order whose Stripe Connect transfer to the vendor failed or is still pending — a manual follow-up queue.</td></tr>
+  <tr><td>Users</td><td>View every account; promote a user to vendor/admin/support.</td></tr>
+  <tr><td>Reports &amp; Analytics</td><td>Platform-wide sales and activity reporting.</td></tr>
+</table>
+
+<h2 id="payments">5. Payment Flow (Stripe Connect)</h2>
+<p>
+  Because Maket Lakay is a marketplace — one checkout can pay several
+  independent vendors — card payments are processed through
+  <strong>Stripe Connect</strong> rather than a standard merchant account.
+  Each vendor is individually onboarded and paid directly.
+</p>
+
+<h3>5.1 Vendor Payout Onboarding</h3>
+<div class="diagram">
+  Vendor opens Store Settings <span class="arrow">&rarr;</span>
+  picks their country <span class="arrow">&rarr;</span>
+  clicks "Connect with Stripe" <span class="arrow">&rarr;</span>
+  completes Stripe's own hosted verification form (identity, bank account) <span class="arrow">&rarr;</span>
+  redirected back to Maket Lakay <span class="arrow">&rarr;</span>
+  status syncs to "Active"
+</div>
+<p>
+  Maket Lakay never sees or stores the vendor's identity documents or bank
+  details — that data goes directly to Stripe. Currently, onboarding requires
+  a business or bank account in a country Stripe supports directly (e.g. the
+  United States, Canada, France) — not Haiti. In practice this means
+  <strong>diaspora-based vendors</strong> can complete payout setup today;
+  support for Haiti-based vendors depends on Stripe expanding country
+  coverage.
+</p>
+
+<h3>5.2 Checkout Gating</h3>
+<p>
+  "Card" only appears as a selectable payment method when <strong>every</strong>
+  vendor represented in the cart has completed Stripe Connect onboarding. If
+  even one seller hasn't finished setup, Card is shown disabled with an
+  explanation, and the customer can still complete checkout with another
+  payment method.
+</p>
+
+<h3>5.3 Charge &amp; Payout Split</h3>
+<p>
+  Maket Lakay uses the <em>Separate Charges and Transfers</em> pattern: the
+  customer's card is charged once, for the full order total, into the
+  platform's own Stripe balance. Immediately afterward, the platform
+  transfers each vendor's share (order subtotal minus the marketplace
+  commission) directly to that vendor's own connected Stripe account.
+</p>
+<div class="diagram">
+  Customer confirms card payment <span class="arrow">&rarr;</span>
+  Maket Lakay's server re-verifies the payment with Stripe <span class="arrow">&rarr;</span>
+  the order is recorded <span class="arrow">&rarr;</span>
+  a transfer is sent to each vendor's Stripe account for their share <span class="arrow">&rarr;</span>
+  order confirmation shown to the customer
+</div>
+<p>
+  The order is recorded <strong>before</strong> any transfer is attempted, so
+  if a transfer fails for any reason, the customer's order is never lost —
+  it's simply flagged for admin follow-up in the Payout Reconciliation view
+  (Section 4).
+</p>
+
+<h3>5.4 What Stays Simulated</h3>
+<p>
+  MonCash, NatCash, Bank Transfer, and the declined-test payment option
+  remain frontend simulations by design — no real money moves through them
+  regardless of Stripe's configuration status.
+</p>
+
+<h2 id="roles">6. Roles &amp; Access</h2>
+<table>
+  <tr><th>Role</th><th>Access</th></tr>
+  <tr><td><span class="role-badge role-customer">Customer</span></td><td>Marketplace, cart, checkout, account, orders, tracking, support.</td></tr>
+  <tr><td><span class="role-badge role-vendor">Vendor</span></td><td>Everything under <code>/vendor</code> — scoped to their own store(s).</td></tr>
+  <tr><td><span class="role-badge role-admin">Support</span></td><td>Shares <code>/admin/support</code>, <code>/admin/orders</code>, <code>/admin/vendors</code>, <code>/admin/products</code> with admin.</td></tr>
+  <tr><td><span class="role-badge role-admin">Admin</span></td><td>Full platform oversight — everything above plus approvals, commissions, delivery-zone configuration, and reporting.</td></tr>
+</table>
+<p>
+  New sign-ups default to <em>customer</em>. Vendor access is granted only
+  through the real application-and-approval flow. Admin/support access is
+  granted by an existing admin promoting a user from <code>/admin/users</code>.
+</p>
+
+<h2 id="status">7. Current Status</h2>
+<table>
+  <tr><th>Area</th><th>Status</th></tr>
+  <tr><td>Core marketplace (catalog, cart, orders, tracking)</td><td><span class="status-live">Live</span></td></tr>
+  <tr><td>Vendor onboarding, products, delivery, promotions, wallet</td><td><span class="status-live">Live</span></td></tr>
+  <tr><td>Customer addresses, wishlist, reviews</td><td><span class="status-live">Live</span></td></tr>
+  <tr><td>Support tickets, disputes, refund requests, escalations</td><td><span class="status-live">Live</span></td></tr>
+  <tr><td>Admin oversight, commissions, delivery zones</td><td><span class="status-live">Live</span></td></tr>
+  <tr><td>Stripe Connect vendor onboarding &amp; payout splitting</td><td><span class="status-live">Live</span> (diaspora vendors only)</td></tr>
+  <tr><td>Card payments at checkout</td><td><span class="status-off">Disabled</span> — pending go-live decision</td></tr>
+  <tr><td>MonCash / NatCash / Bank Transfer</td><td><span class="status-partial">Simulated</span> by design</td></tr>
+  <tr><td>Email confirmation on sign-up</td><td><span class="status-off">Disabled</span> — needs production SMTP</td></tr>
+  <tr><td>Leaked-password protection</td><td><span class="status-off">Disabled</span> — requires a paid Supabase plan</td></tr>
+</table>
+
+<p class="footer-note">
+  Maket Lakay — Application Flow Reference · Generated 2026-08-21
+</p>
+
+</body>
+</html>

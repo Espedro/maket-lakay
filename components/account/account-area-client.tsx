@@ -20,6 +20,7 @@ import {
   Settings,
   ShoppingBag,
   Star,
+  Store,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -484,6 +485,15 @@ export function AccountAreaClient({ view, orderId }: AccountAreaClientProps) {
             );
           })}
         </nav>
+        {currentUser?.role === "customer" ? (
+          <Link
+            href="/sell"
+            className="mt-3 flex items-center justify-center gap-2 border border-primary bg-primary/5 px-3 py-2 text-sm font-bold text-primary hover:bg-primary/10"
+          >
+            <Store className="size-4" />
+            Become a vendor
+          </Link>
+        ) : null}
       </aside>
 
       <main className="min-w-0">
