@@ -58,16 +58,27 @@ function VendorPayoutsPanel({ vendorId }: { vendorId?: string }) {
     const params = new URLSearchParams(window.location.search);
     const stripeParam = params.get("stripe");
 
-    if (stripeParam === "return" || stripeParam === "refresh") {
-      void refresh().then(() => {
-        toast({
-          title: stripeParam === "return" ? "Payout setup updated" : "Payout setup paused",
-          description:
-            stripeParam === "return"
-              ? "We checked your Stripe status and updated it below."
-              : "You can pick up where you left off any time.",
+    if (stripeParam === "return") {
+      // Sync fresh status from Stripe into Supabase first, then re-read it
+      // into local state - refresh() alone only re-reads whatever is
+      // already in Supabase, it doesn't call Stripe.
+      void fetch("/api/vendor/connect/refresh", { method: "POST" })
+        .catch(() => null)
+        .then(() => refresh())
+        .then(() => {
+          toast({
+            title: "Payout setup updated",
+            description: "We checked your Stripe status and updated it below.",
+          });
         });
+    } else if (stripeParam === "refresh") {
+      toast({
+        title: "Payout setup paused",
+        description: "You can pick up where you left off any time.",
       });
+    }
+
+    if (stripeParam) {
       params.delete("stripe");
       const nextUrl = params.toString()
         ? `${window.location.pathname}?${params.toString()}`
@@ -152,6 +163,22 @@ function VendorPayoutsPanel({ vendorId }: { vendorId?: string }) {
           <Button type="button" onClick={() => void startConnect()} disabled={isStarting}>
             {hasAccount ? "Continue setup on Stripe" : "Connect with Stripe"}
           </Button>
+          {hasAccount ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                void fetch("/api/vendor/connect/refresh", { method: "POST" })
+                  .catch(() => null)
+                  .then(() => refresh())
+                  .then(() =>
+                    toast({ title: "Status refreshed", description: "Checked the latest status from Stripe." }),
+                  )
+              }
+            >
+              Refresh status
+            </Button>
+          ) : null}
         </div>
       )}
     </section>

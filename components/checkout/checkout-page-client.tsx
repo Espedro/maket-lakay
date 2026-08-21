@@ -898,20 +898,34 @@ export function CheckoutPageClient() {
                     One or more sellers in your cart haven&apos;t finished payment setup yet.
                     Choose another payment method for now.
                   </p>
-                ) : cardClientSecret && stripePromise ? (
-                  <div className="mt-4">
-                    <Elements stripe={stripePromise} options={{ clientSecret: cardClientSecret }}>
-                      <CardPaymentStep ref={cardPaymentRef} onReady={setCardReady} />
-                    </Elements>
-                  </div>
-                ) : (
+                ) : !(cardClientSecret && stripePromise) ? (
                   <p className="mt-3 text-sm text-muted-foreground">
                     Preparing the secure card form...
                   </p>
-                )}
+                ) : null}
               </div>
             ) : null}
           </section>
+        ) : null}
+
+        {/*
+         * Rendered outside the step === "payment" block, and kept mounted for as
+         * long as card is selected - not just on the payment step - so
+         * cardPaymentRef stays attached to a live CardPaymentStep instance when
+         * placeOrder() (triggered from the review step) calls confirmPayment().
+         * Unmounting this on step change was a real bug: card payments could
+         * never complete, because the ref went stale before "Place order" was
+         * ever clickable.
+         */}
+        {paymentMethodId === "card" && cardClientSecret && stripePromise ? (
+          <div className={step === "payment" ? "border bg-white p-4" : "hidden"}>
+            {step === "payment" ? <h3 className="font-black">Secure card form</h3> : null}
+            <div className="mt-4">
+              <Elements stripe={stripePromise} options={{ clientSecret: cardClientSecret }}>
+                <CardPaymentStep ref={cardPaymentRef} onReady={setCardReady} />
+              </Elements>
+            </div>
+          </div>
         ) : null}
 
         {step === "review" ? (
