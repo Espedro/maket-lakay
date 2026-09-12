@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import * as React from "react";
-import { CheckCircle2, Eye, PauseCircle, RefreshCw, Search, XCircle } from "lucide-react";
+import { CheckCircle2, Eye, PauseCircle, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,90 +16,89 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ResponsiveDataView } from "@/components/ui/responsive-data-view";
-import { categories, products, stores, vendors } from "@/data/mock-data";
-import { useAdminManagement } from "@/hooks/use-admin-management";
-import type { ProductModerationStatus } from "@/lib/admin-management";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import type { Product } from "@/types";
+import { toast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
+import { getAllRealProductsForAdmin, getCategories, updateRealProductStatus } from "@/services/products";
+import { getStores, getVendors } from "@/services/vendors";
+import type { Category, Product, ProductStatus, Store, Vendor } from "@/types";
 
 type ProductAction = {
   label: string;
   productId: string;
-  status: ProductModerationStatus;
+  status: ProductStatus;
   message: string;
 };
 
-type DateAddedFilter = "all" | "today" | "7d" | "30d" | "90d";
-
-const dateAddedOptions: Array<{ label: string; value: DateAddedFilter; days?: number }> = [
-  { label: "Any date added", value: "all" },
-  { label: "Added today", value: "today" },
-  { label: "Last 7 days", value: "7d", days: 7 },
-  { label: "Last 30 days", value: "30d", days: 30 },
-  { label: "Last 90 days", value: "90d", days: 90 },
+const statusOptions: Array<{ value: ProductStatus; label: string }> = [
+  { value: "draft", label: "Draft" },
+  { value: "active", label: "Active" },
+  { value: "out_of_stock", label: "Out of stock" },
 ];
 
-const referenceDate = new Date("2026-07-23T12:00:00-04:00");
-
-function getStore(product: Product) {
-  return stores.find((store) => store.id === product.storeId);
-}
-
-function getVendor(product: Product) {
-  const store = getStore(product);
-  return vendors.find((vendor) => vendor.id === store?.vendorId);
-}
-
-function getCategory(product: Product) {
-  return categories.find((category) => category.id === product.categoryId);
-}
-
-function statusVariant(status: string) {
-  if (status === "approved") return "success";
-  if (["rejected", "suspended"].includes(status)) return "destructive";
+function statusVariant(status: ProductStatus) {
+  if (status === "active") return "success";
+  if (status === "out_of_stock") return "destructive";
   return "neutral";
 }
 
-function matchesDateAdded(submittedAt: string, filter: DateAddedFilter) {
-  if (filter === "all") return true;
-
-  const submittedDate = new Date(submittedAt);
-  if (Number.isNaN(submittedDate.getTime())) return false;
-
-  if (filter === "today") {
-    return submittedDate.toDateString() === referenceDate.toDateString();
-  }
-
-  const option = dateAddedOptions.find((item) => item.value === filter);
-  if (!option?.days) return true;
-
-  const threshold = referenceDate.getTime() - option.days * 24 * 60 * 60 * 1000;
-  return submittedDate.getTime() >= threshold;
-}
-
 export function ProductModerationClient() {
-  const { isReady, state, updateProduct } = useAdminManagement();
+  const [products, setProducts] = React.useState<Product[]>([]);
+  const [stores, setStores] = React.useState<Store[]>([]);
+  const [vendors, setVendors] = React.useState<Vendor[]>([]);
+  const [categories, setCategories] = React.useState<Category[]>([]);
+  const [isReady, setIsReady] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [vendorFilter, setVendorFilter] = React.useState("all");
   const [categoryFilter, setCategoryFilter] = React.useState("all");
-  const [dateAddedFilter, setDateAddedFilter] = React.useState<DateAddedFilter>("all");
   const [selectedProduct, setSelectedProduct] = React.useState<Product | null>(null);
   const [pendingAction, setPendingAction] = React.useState<ProductAction | null>(null);
   const hasActiveFilters =
-    query.trim() !== "" ||
-    statusFilter !== "all" ||
-    vendorFilter !== "all" ||
-    categoryFilter !== "all" ||
-    dateAddedFilter !== "all";
+    query.trim() !== "" || statusFilter !== "all" || vendorFilter !== "all" || categoryFilter !== "all";
+
+  const refresh = React.useCallback(async () => {
+    setIsReady(false);
+    try {
+      const [realProducts, realStores, realVendors, realCategories] = await Promise.all([
+        getAllRealProductsForAdmin(),
+        getStores(),
+        getVendors(),
+        getCategories(),
+      ]);
+      setProducts(realProducts);
+      setStores(realStores);
+      setVendors(realVendors);
+      setCategories(realCategories);
+    } catch (error) {
+      toast({
+        title: "Could not load products",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReady(true);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const getStore = React.useCallback((product: Product) => stores.find((store) => store.id === product.storeId), [stores]);
+  const getVendor = React.useCallback(
+    (product: Product) => vendors.find((vendor) => vendor.id === getStore(product)?.vendorId),
+    [getStore, vendors],
+  );
+  const getCategory = React.useCallback(
+    (product: Product) => categories.find((category) => category.id === product.categoryId),
+    [categories],
+  );
 
   const productRows = products
     .map((product) => ({
       ...product,
       vendorId: getStore(product)?.vendorId ?? "",
       categoryName: getCategory(product)?.name ?? "Uncategorized",
-      moderationStatus: state.products[product.id]?.moderationStatus ?? "pending",
-      submittedAt: state.products[product.id]?.submittedAt ?? "2026-07-10T10:30:00Z",
       vendorName: getVendor(product)?.name ?? "Unknown vendor",
     }))
     .filter((product) => {
@@ -108,12 +107,11 @@ export function ProductModerationClient() {
         product.name.toLowerCase().includes(normalizedQuery) ||
         product.vendorName.toLowerCase().includes(normalizedQuery) ||
         product.categoryName.toLowerCase().includes(normalizedQuery);
-      const matchesStatus = statusFilter === "all" || product.moderationStatus === statusFilter;
+      const matchesStatus = statusFilter === "all" || product.status === statusFilter;
       const matchesVendor = vendorFilter === "all" || product.vendorId === vendorFilter;
       const matchesCategory = categoryFilter === "all" || product.categoryId === categoryFilter;
-      const matchesDate = matchesDateAdded(product.submittedAt, dateAddedFilter);
 
-      return matchesQuery && matchesStatus && matchesVendor && matchesCategory && matchesDate;
+      return matchesQuery && matchesStatus && matchesVendor && matchesCategory;
     });
 
   function resetFilters() {
@@ -121,14 +119,26 @@ export function ProductModerationClient() {
     setStatusFilter("all");
     setVendorFilter("all");
     setCategoryFilter("all");
-    setDateAddedFilter("all");
   }
 
-  function confirmAction() {
+  async function confirmAction() {
     if (!pendingAction) return;
 
-    updateProduct(pendingAction.productId, pendingAction.status, pendingAction.message);
+    const result = await updateRealProductStatus(pendingAction.productId, pendingAction.status);
+
+    if (!result.ok) {
+      toast({
+        title: "Could not update product",
+        description: result.reason,
+        variant: "destructive",
+      });
+      setPendingAction(null);
+      return;
+    }
+
+    toast({ title: "Product updated", description: pendingAction.message });
     setPendingAction(null);
+    await refresh();
   }
 
   function renderProductActions(product: (typeof productRows)[number]) {
@@ -140,49 +150,27 @@ export function ProductModerationClient() {
         </Button>
         <ModerationButton
           icon={CheckCircle2}
-          label="Approve"
+          label="Publish"
+          disabled={product.status === "active"}
           onClick={() =>
             setPendingAction({
-              label: "Approve product",
+              label: "Publish product",
               productId: product.id,
-              status: "approved",
-              message: `${product.name} was approved locally.`,
-            })
-          }
-        />
-        <ModerationButton
-          icon={XCircle}
-          label="Reject"
-          onClick={() =>
-            setPendingAction({
-              label: "Reject product",
-              productId: product.id,
-              status: "rejected",
-              message: `${product.name} was rejected locally.`,
+              status: "active",
+              message: `${product.name} is now active on the marketplace.`,
             })
           }
         />
         <ModerationButton
           icon={PauseCircle}
-          label="Suspend"
+          label="Move to draft"
+          disabled={product.status === "draft"}
           onClick={() =>
             setPendingAction({
-              label: "Suspend product",
+              label: "Move product to draft",
               productId: product.id,
-              status: "suspended",
-              message: `${product.name} was suspended locally.`,
-            })
-          }
-        />
-        <ModerationButton
-          icon={RefreshCw}
-          label="Changes"
-          onClick={() =>
-            setPendingAction({
-              label: "Request changes",
-              productId: product.id,
-              status: "changes_requested",
-              message: `Changes were requested for ${product.name}.`,
+              status: "draft",
+              message: `${product.name} was moved back to draft and is no longer visible.`,
             })
           }
         />
@@ -203,10 +191,10 @@ export function ProductModerationClient() {
           </p>
           <h1 className="mt-2 text-3xl font-black tracking-normal">Products</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            Moderate product submissions, preview listings, and update marketplace visibility.
+            Review every product vendors have added and control marketplace visibility.
           </p>
         </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_180px_200px_200px_180px]">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_180px_200px_200px]">
           <label className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -217,17 +205,17 @@ export function ProductModerationClient() {
             />
           </label>
           <select
-            aria-label="Filter products by moderation status"
+            aria-label="Filter products by status"
             className="h-10 border bg-white px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
           >
-            <option value="all">All moderation</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="changes_requested">Changes requested</option>
-            <option value="rejected">Rejected</option>
-            <option value="suspended">Suspended</option>
+            <option value="all">All statuses</option>
+            {statusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <select
             aria-label="Filter products by vendor"
@@ -255,18 +243,6 @@ export function ProductModerationClient() {
               </option>
             ))}
           </select>
-          <select
-            aria-label="Filter products by date added"
-            className="h-10 border bg-white px-3 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            value={dateAddedFilter}
-            onChange={(event) => setDateAddedFilter(event.target.value as DateAddedFilter)}
-          >
-            {dateAddedOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
           <p className="text-sm font-semibold text-muted-foreground">
@@ -278,12 +254,12 @@ export function ProductModerationClient() {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {["pending", "approved", "changes_requested", "rejected", "suspended"].map((status) => (
-          <div key={status} className="border bg-white p-4">
-            <p className="text-sm capitalize text-muted-foreground">{status.replaceAll("_", " ")}</p>
+      <section className="grid gap-4 sm:grid-cols-3">
+        {statusOptions.map((option) => (
+          <div key={option.value} className="border bg-white p-4">
+            <p className="text-sm text-muted-foreground">{option.label}</p>
             <p className="mt-2 text-3xl font-black">
-              {products.filter((product) => (state.products[product.id]?.moderationStatus ?? "pending") === status).length}
+              {products.filter((product) => product.status === option.value).length}
             </p>
           </div>
         ))}
@@ -296,15 +272,13 @@ export function ProductModerationClient() {
           cardTitle={(product) => product.name}
           cardDescription={(product) => `${product.vendorName} - ${product.categoryName}`}
           cardMeta={(product) => (
-            <Badge variant={statusVariant(product.moderationStatus)}>
-              {product.moderationStatus.replaceAll("_", " ")}
-            </Badge>
+            <Badge variant={statusVariant(product.status)}>{product.status.replaceAll("_", " ")}</Badge>
           )}
           cardFields={(product) => [
             { label: "Vendor", value: product.vendorName },
             { label: "Category", value: product.categoryName },
             { label: "Price", value: formatCurrency(product.price, product.currency) },
-            { label: "Date added", value: formatDate(product.submittedAt) },
+            { label: "Stock", value: product.stock.toString() },
             { label: "Slug", value: product.slug },
           ]}
           cardActions={renderProductActions}
@@ -314,15 +288,15 @@ export function ProductModerationClient() {
             </div>
           }
           table={
-          <table className="responsive-table min-w-[1120px]">
+          <table className="responsive-table min-w-[1000px]">
             <thead className="text-left text-muted-foreground">
               <tr className="border-b">
                 <th className="py-3 font-medium">Product</th>
                 <th className="py-3 font-medium">Vendor</th>
                 <th className="py-3 font-medium">Category</th>
                 <th className="py-3 font-medium">Price</th>
-                <th className="py-3 font-medium">Date added</th>
-                <th className="py-3 font-medium">Moderation</th>
+                <th className="py-3 font-medium">Stock</th>
+                <th className="py-3 font-medium">Status</th>
                 <th className="py-3 font-medium">Actions</th>
               </tr>
             </thead>
@@ -343,11 +317,9 @@ export function ProductModerationClient() {
                   <td className="py-3">{product.vendorName}</td>
                   <td className="py-3">{product.categoryName}</td>
                   <td className="py-3 font-black">{formatCurrency(product.price, product.currency)}</td>
-                  <td className="py-3">{formatDate(product.submittedAt)}</td>
+                  <td className="py-3">{product.stock}</td>
                   <td className="py-3">
-                    <Badge variant={statusVariant(product.moderationStatus)}>
-                      {product.moderationStatus.replaceAll("_", " ")}
-                    </Badge>
+                    <Badge variant={statusVariant(product.status)}>{product.status.replaceAll("_", " ")}</Badge>
                   </td>
                   <td className="py-3">
                     <div className="dashboard-action-row">
@@ -397,9 +369,7 @@ export function ProductModerationClient() {
         <DialogContent className="rounded-none">
           <DialogHeader>
             <DialogTitle>{pendingAction?.label}</DialogTitle>
-            <DialogDescription>
-              This action only updates product moderation state in localStorage.
-            </DialogDescription>
+            <DialogDescription>This updates the product&apos;s live status in Supabase.</DialogDescription>
           </DialogHeader>
           <div className="border bg-muted/30 p-4 text-sm">{pendingAction?.message}</div>
           <DialogFooter>
@@ -420,13 +390,15 @@ function ModerationButton({
   icon: Icon,
   label,
   onClick,
+  disabled,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <Button type="button" variant="outline" size="sm" onClick={onClick}>
+    <Button type="button" variant="outline" size="sm" onClick={onClick} disabled={disabled}>
       <Icon className="size-4" />
       {label}
     </Button>

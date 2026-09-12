@@ -1,5 +1,6 @@
 import { reviews } from "@/data/mock-data";
 import { mapCategoryRow, mapProductRow } from "@/lib/supabase/mappers";
+import { createClient } from "@/lib/supabase/client";
 import { createPublicClient } from "@/lib/supabase/public";
 import {
   discoverProducts,
@@ -8,6 +9,7 @@ import {
   type ProductDiscoveryFilters,
 } from "@/lib/product-discovery";
 import { getStores, getVendors } from "@/services/vendors";
+import type { ProductStatus } from "@/types";
 
 async function fetchAllProducts() {
   const supabase = createPublicClient();
@@ -29,6 +31,34 @@ export async function getCategories() {
   }
 
   return (data ?? []).map(mapCategoryRow);
+}
+
+/**
+ * Admin-only: products RLS only exposes draft/out-of-audience rows to the
+ * owning vendor or an admin session, so this needs the authenticated
+ * client (cookie-based session) rather than the anon `createPublicClient`
+ * used for public catalog reads.
+ */
+export async function getAllRealProductsForAdmin() {
+  const supabase = createClient();
+  const { data, error } = await supabase.from("products").select("*");
+
+  if (error) {
+    throw new Error(`Failed to load products: ${error.message}`);
+  }
+
+  return (data ?? []).map(mapProductRow);
+}
+
+export async function updateRealProductStatus(productId: string, status: ProductStatus) {
+  const supabase = createClient();
+  const { error } = await supabase.from("products").update({ status }).eq("id", productId);
+
+  if (error) {
+    return { ok: false as const, reason: error.message };
+  }
+
+  return { ok: true as const };
 }
 
 async function fetchDiscoveryContext(): Promise<ProductDiscoveryContext> {
