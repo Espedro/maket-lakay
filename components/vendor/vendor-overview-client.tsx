@@ -157,9 +157,9 @@ export function VendorOverviewClient() {
   const [rangeId, setRangeId] = React.useState<DateRangeId>("30d");
   const allOrders = React.useMemo(() => mergeOrders(localOrders), [localOrders]);
   const selectedStore = scopedStores.find((store) => store.id === storeId) ?? scopedStores[0];
-  const storeProducts = getStoreProducts(selectedStore.id);
-  const storeOrders = getStoreOrders(allOrders, selectedStore.id, rangeId);
-  const wallet = vendorWallets.find((item) => item.storeId === selectedStore.id);
+  const storeProducts = getStoreProducts(selectedStore?.id ?? "");
+  const storeOrders = getStoreOrders(allOrders, selectedStore?.id ?? "", rangeId);
+  const wallet = vendorWallets.find((item) => item.storeId === selectedStore?.id);
   const totalSales = storeOrders.reduce((sum, order) => sum + order.total, 0);
   const pendingOrders = storeOrders.filter((order) =>
     ["pending", "confirmed", "processing", "ready_for_delivery"].includes(order.status),
@@ -172,7 +172,7 @@ export function VendorOverviewClient() {
   const onboardingItems = [
     {
       label: "Store approved",
-      done: Boolean(selectedStore.verified),
+      done: Boolean(selectedStore?.verified),
       href: "/vendor/settings",
     },
     {
@@ -182,7 +182,7 @@ export function VendorOverviewClient() {
     },
     {
       label: "Set delivery preferences",
-      done: Boolean(selectedStore.city),
+      done: Boolean(selectedStore?.city),
       href: "/vendor/settings",
     },
     {
