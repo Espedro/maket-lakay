@@ -7,20 +7,64 @@ import { Bell, PackageSearch, Truck } from "lucide-react";
 import { EmptyState } from "@/components/marketplace/empty-state";
 import { StatusBadge } from "@/components/marketplace/status-badge";
 import { Button } from "@/components/ui/button";
-import { customerNotifications, stores } from "@/data/mock-data";
+import { customerNotifications } from "@/data/mock-data";
+import { useAuth } from "@/hooks/use-auth";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
-import { getOrderTrackingEvents, mergeOrders } from "@/lib/orders";
+import { getOrderTrackingEvents } from "@/lib/orders";
 import { formatCurrency, formatDate } from "@/lib/utils";
-
-function getStoreName(storeId: string) {
-  return stores.find((store) => store.id === storeId)?.name ?? "Marketplace store";
-}
+import { getRealOrdersByCustomer } from "@/services/orders";
+import { getStores } from "@/services/vendors";
+import type { Order, Store } from "@/types";
 
 export function CustomerOrdersClient() {
-  const { customerNotifications: localNotifications, isReady, localOrders } =
+  const { user, isReady: authReady } = useAuth();
+  const { customerNotifications: localNotifications, isReady: storageReady, localOrders } =
     useMarketplaceStorage();
-  const orders = mergeOrders(localOrders);
+  const [realOrders, setRealOrders] = React.useState<Order[]>([]);
+  const [stores, setStores] = React.useState<Store[]>([]);
+  const [ordersReady, setOrdersReady] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!user) {
+      setRealOrders([]);
+      setStores([]);
+      setOrdersReady(true);
+      return;
+    }
+
+    let active = true;
+    setOrdersReady(false);
+
+    Promise.all([getRealOrdersByCustomer(user.id), getStores()]).then(([orders, storeList]) => {
+      if (active) {
+        setRealOrders(orders);
+        setStores(storeList);
+        setOrdersReady(true);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  function getStoreName(storeId: string) {
+    return stores.find((store) => store.id === storeId)?.name ?? "Marketplace store";
+  }
+
+  // Real orders are authoritative; a local order only surfaces here on its
+  // own when the real write failed at checkout ("Order saved locally only"),
+  // so it isn't lost even though it never made it to Supabase.
+  const merged = new Map<string, Order>();
+  realOrders.forEach((order) => merged.set(order.id, order));
+  localOrders.forEach((order) => {
+    if (!merged.has(order.id)) merged.set(order.id, order);
+  });
+  const orders = Array.from(merged.values()).sort(
+    (a, b) => new Date(b.placedAt).getTime() - new Date(a.placedAt).getTime(),
+  );
   const notifications = [...localNotifications, ...customerNotifications];
+  const isReady = authReady && storageReady && ordersReady;
 
   if (!isReady) {
     return <div className="h-80 animate-pulse border bg-muted" />;
