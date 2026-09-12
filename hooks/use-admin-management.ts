@@ -324,9 +324,23 @@ export function useAdminManagement() {
   const updateVendorApplicationStatus = React.useCallback(
     async (applicationId: string, status: VendorApplicationStatus, message: string) => {
       const nextState = readState();
-      const applicationToUpdate = nextState.vendorApplications.find(
+      let applicationToUpdate = nextState.vendorApplications.find(
         (application) => application.id === applicationId,
       );
+
+      // Applications fetched straight from Supabase (e.g. submitted from a
+      // different session) only ever land in the merged React `state`, not
+      // in localStorage - readState() alone would miss them, silently skip
+      // real vendor account creation below, and still flip the application
+      // to "approved" in Supabase with no vendor/store behind it.
+      if (!applicationToUpdate) {
+        applicationToUpdate = state.vendorApplications.find(
+          (application) => application.id === applicationId,
+        );
+        if (applicationToUpdate) {
+          nextState.vendorApplications = [applicationToUpdate, ...nextState.vendorApplications];
+        }
+      }
       const oldStatus = applicationToUpdate?.status;
       let realAccountResult: { ok: boolean; reason?: string; vendorId?: string; storeId?: string } | null = null;
 
@@ -441,7 +455,7 @@ export function useAdminManagement() {
         });
       }
     },
-    [saveState],
+    [saveState, state.vendorApplications],
   );
 
   const updateProduct = React.useCallback(
