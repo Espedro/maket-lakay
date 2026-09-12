@@ -1,8 +1,10 @@
-import { customerAddresses, deliveryZones, products, stores } from "@/data/mock-data";
+import { customerAddresses, deliveryZones } from "@/data/mock-data";
 import type { CartItem } from "@/hooks/use-marketplace-storage";
 import { findDeliveryZone } from "@/lib/orders";
 import { normalizeProductPrice } from "@/lib/product-discovery";
 import { calculateVendorPayouts } from "@/lib/payments";
+import { getProductsByIds } from "@/services/products";
+import { getStores } from "@/services/vendors";
 import type {
   CheckoutOrderSnapshot,
   CustomerAddress,
@@ -40,10 +42,24 @@ export interface CartSummary {
 
 export const ORDER_SNAPSHOT_KEY = "maket-lakay-last-order";
 
-export function getCartProductItems(cart: CartItem[]): CartProductItem[] {
+export const EMPTY_CART_SUMMARY: CartSummary = {
+  groups: [],
+  subtotal: 0,
+  deliveryFee: 0,
+  total: 0,
+  itemCount: 0,
+  stockIssues: [],
+};
+
+export async function getCartProductItems(cart: CartItem[]): Promise<CartProductItem[]> {
+  if (cart.length === 0) return [];
+
+  const ids = Array.from(new Set(cart.map((item) => item.productId)));
+  const realProducts = await getProductsByIds(ids);
+
   return cart
     .map((cartItem) => {
-      const product = products.find((item) => item.id === cartItem.productId);
+      const product = realProducts.find((item) => item.id === cartItem.productId);
       if (!product) {
         return null;
       }
@@ -84,12 +100,12 @@ export function calculateDeliveryFee(
   return baseFee + cityAdjustment + Math.max(0, itemCount - 1) * 0.75;
 }
 
-export function buildCartSummary(
+export async function buildCartSummary(
   cart: CartItem[],
   address: CustomerAddress | undefined = customerAddresses[0],
   zones: DeliveryZone[] = deliveryZones,
-): CartSummary {
-  const items = getCartProductItems(cart);
+): Promise<CartSummary> {
+  const [items, realStores] = await Promise.all([getCartProductItems(cart), getStores()]);
   const grouped = new Map<string, CartProductItem[]>();
 
   items.forEach((item) => {
@@ -98,7 +114,7 @@ export function buildCartSummary(
   });
 
   const groups = Array.from(grouped.entries()).map(([storeId, groupItems]) => {
-    const store = stores.find((item) => item.id === storeId);
+    const store = realStores.find((item) => item.id === storeId);
     if (!store) {
       throw new Error(`Missing store for ${storeId}`);
     }

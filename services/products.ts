@@ -22,6 +22,19 @@ async function fetchAllProducts() {
   return (data ?? []).map(mapProductRow);
 }
 
+export async function getProductsByIds(ids: string[]) {
+  if (ids.length === 0) return [];
+
+  const supabase = createPublicClient();
+  const { data, error } = await supabase.from("products").select("*").in("id", ids);
+
+  if (error) {
+    throw new Error(`Failed to load products: ${error.message}`);
+  }
+
+  return (data ?? []).map(mapProductRow);
+}
+
 export async function getCategories() {
   const supabase = createPublicClient();
   const { data, error } = await supabase.from("categories").select("*");

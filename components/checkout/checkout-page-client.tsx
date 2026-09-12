@@ -32,7 +32,7 @@ import { deliveryZones, paymentMethods } from "@/data/mock-data";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
-import { buildCartSummary, createOrderSnapshot, type CartSummary } from "@/lib/checkout";
+import { buildCartSummary, createOrderSnapshot, EMPTY_CART_SUMMARY, type CartSummary } from "@/lib/checkout";
 import {
   createCustomerNotification,
   createDeliveryAssignment,
@@ -302,7 +302,26 @@ export function CheckoutPageClient() {
     deliveryMethods.find((method) => method.id === deliveryMethodId) ?? deliveryMethods[0];
   const selectedPayment =
     paymentOptions.find((payment) => payment.id === paymentMethodId) ?? paymentOptions[0];
-  const summary = buildCartSummary(cart, selectedAddress, zones);
+  const [summary, setSummary] = React.useState<CartSummary>(EMPTY_CART_SUMMARY);
+  const [summaryReady, setSummaryReady] = React.useState(false);
+
+  React.useEffect(() => {
+    let active = true;
+    setSummaryReady(false);
+
+    buildCartSummary(cart, selectedAddress, zones).then((result) => {
+      if (active) {
+        setSummary(result);
+        setSummaryReady(true);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, selectedAddress?.id, zones]);
+
   const deliveryFee = getDeliveryFee(summary, deliveryMethodId);
   const discount = 0;
   const total = Math.max(0, summary.subtotal + deliveryFee - discount);
@@ -383,6 +402,7 @@ export function CheckoutPageClient() {
 
   const canPlaceOrder =
     isReady &&
+    summaryReady &&
     cart.length > 0 &&
     selectedAddress &&
     summary.stockIssues.length === 0 &&
@@ -633,7 +653,7 @@ export function CheckoutPageClient() {
     router.push("/checkout/confirmation");
   }
 
-  if (!isReady || !authReady || !addressesReady) {
+  if (!isReady || !authReady || !addressesReady || !summaryReady) {
     return (
       <div className="grid gap-4">
         <div className="h-20 animate-pulse border bg-muted" />

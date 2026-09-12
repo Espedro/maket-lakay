@@ -10,15 +10,16 @@ import { VendorCartGroup } from "@/components/checkout/vendor-cart-group";
 import { EmptyState } from "@/components/marketplace/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { deliveryZones, products } from "@/data/mock-data";
+import { deliveryZones } from "@/data/mock-data";
 import { toast } from "@/hooks/use-toast";
 import type { CartItem } from "@/hooks/use-marketplace-storage";
 import { useMarketplaceStorage } from "@/hooks/use-marketplace-storage";
-import { buildCartSummary } from "@/lib/checkout";
+import { buildCartSummary, EMPTY_CART_SUMMARY } from "@/lib/checkout";
 import { normalizeProductPrice } from "@/lib/product-discovery";
 import { formatCurrency } from "@/lib/utils";
+import { getProductsByIds } from "@/services/products";
 import { getRealDeliveryZones } from "@/services/delivery";
-import type { DeliveryZone } from "@/types";
+import type { DeliveryZone, Product } from "@/types";
 
 type PromoState =
   | { code: ""; discount: 0; message: ""; status: "idle" }
@@ -53,10 +54,12 @@ function getPromoDiscount(code: string, subtotal: number, deliveryFee: number) {
 
 function SavedForLaterSection({
   items,
+  products,
   onMoveToCart,
   onRemove,
 }: {
   items: CartItem[];
+  products: Product[];
   onMoveToCart: ReturnType<typeof useMarketplaceStorage>["moveSavedItemToCart"];
   onRemove: ReturnType<typeof useMarketplaceStorage>["removeSavedItem"];
 }) {
@@ -156,6 +159,9 @@ export function CartPageClient() {
     status: "idle",
   });
   const [zones, setZones] = React.useState<DeliveryZone[]>(deliveryZones);
+  const [summary, setSummary] = React.useState(EMPTY_CART_SUMMARY);
+  const [summaryReady, setSummaryReady] = React.useState(false);
+  const [savedForLaterProducts, setSavedForLaterProducts] = React.useState<Product[]>([]);
 
   React.useEffect(() => {
     let active = true;
@@ -171,7 +177,35 @@ export function CartPageClient() {
     };
   }, []);
 
-  const summary = buildCartSummary(cart, undefined, zones);
+  React.useEffect(() => {
+    let active = true;
+    setSummaryReady(false);
+
+    buildCartSummary(cart, undefined, zones).then((result) => {
+      if (active) {
+        setSummary(result);
+        setSummaryReady(true);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [cart, zones]);
+
+  React.useEffect(() => {
+    let active = true;
+    const ids = Array.from(new Set(savedForLater.map((item) => item.productId)));
+
+    getProductsByIds(ids).then((realProducts) => {
+      if (active) setSavedForLaterProducts(realProducts);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [savedForLater]);
+
   const appliedDiscount = Math.min(promo.discount, summary.total);
 
   function applyPromoCode() {
@@ -204,7 +238,7 @@ export function CartPageClient() {
     });
   }
 
-  if (!isReady) {
+  if (!isReady || !summaryReady) {
     return (
       <div className="grid gap-4">
         <div className="h-32 animate-pulse border bg-muted" />
@@ -224,6 +258,7 @@ export function CartPageClient() {
         />
         <SavedForLaterSection
           items={savedForLater}
+          products={savedForLaterProducts}
           onMoveToCart={moveSavedItemToCart}
           onRemove={removeSavedItem}
         />
@@ -250,6 +285,7 @@ export function CartPageClient() {
         ))}
         <SavedForLaterSection
           items={savedForLater}
+          products={savedForLaterProducts}
           onMoveToCart={moveSavedItemToCart}
           onRemove={removeSavedItem}
         />
