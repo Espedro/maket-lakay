@@ -39,35 +39,54 @@ export async function createExpressAccount(vendor: VendorAccountInfo) {
   const stripe = getConnectStripeClient();
   if (!stripe) return { ok: false as const, reason: "Stripe is not configured." };
 
-  const account = await stripe.accounts.create({
-    type: "express",
-    email: vendor.email,
-    business_type: "individual",
-    country: vendor.country,
-    capabilities: {
-      transfers: { requested: true },
-      card_payments: { requested: true },
-    },
-    business_profile: {
-      name: vendor.businessName,
-    },
-  });
+  try {
+    const account = await stripe.accounts.create({
+      type: "express",
+      email: vendor.email,
+      business_type: "individual",
+      country: vendor.country,
+      capabilities: {
+        transfers: { requested: true },
+        card_payments: { requested: true },
+      },
+      business_profile: {
+        name: vendor.businessName,
+      },
+    });
 
-  return { ok: true as const, accountId: account.id };
+    return { ok: true as const, accountId: account.id };
+  } catch (error) {
+    return { ok: false as const, reason: getStripeErrorMessage(error, "Couldn't create the Stripe account.") };
+  }
+}
+
+/**
+ * Stripe SDK calls throw on any API error (Connect not activated on the
+ * platform, unsupported country, invalid email...). Uncaught, that turned
+ * the connect routes into a bare 500 and the vendor only ever saw
+ * "Something went wrong" - surface Stripe's own message instead.
+ */
+function getStripeErrorMessage(error: unknown, fallback: string) {
+  console.error("[stripe connect]", error);
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 export async function createAccountLink(accountId: string, returnUrl: string, refreshUrl: string) {
   const stripe = getConnectStripeClient();
   if (!stripe) return { ok: false as const, reason: "Stripe is not configured." };
 
-  const link = await stripe.accountLinks.create({
-    account: accountId,
-    type: "account_onboarding",
-    return_url: returnUrl,
-    refresh_url: refreshUrl,
-  });
+  try {
+    const link = await stripe.accountLinks.create({
+      account: accountId,
+      type: "account_onboarding",
+      return_url: returnUrl,
+      refresh_url: refreshUrl,
+    });
 
-  return { ok: true as const, url: link.url };
+    return { ok: true as const, url: link.url };
+  } catch (error) {
+    return { ok: false as const, reason: getStripeErrorMessage(error, "Couldn't open Stripe onboarding.") };
+  }
 }
 
 function mapAccountStatus(account: Stripe.Account): StripeConnectStatus {
@@ -86,7 +105,12 @@ export async function retrieveAccountStatus(accountId: string) {
   const stripe = getConnectStripeClient();
   if (!stripe) return { ok: false as const, reason: "Stripe is not configured." };
 
-  const account = await stripe.accounts.retrieve(accountId);
+  let account: Stripe.Account;
+  try {
+    account = await stripe.accounts.retrieve(accountId);
+  } catch (error) {
+    return { ok: false as const, reason: getStripeErrorMessage(error, "Couldn't check the Stripe account.") };
+  }
 
   const result: VendorConnectStatus = {
     status: mapAccountStatus(account),

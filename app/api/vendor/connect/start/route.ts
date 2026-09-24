@@ -17,7 +17,13 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const country = typeof body?.country === "string" ? body.country.toUpperCase() : "";
 
-  const vendor = await getVendorByOwnerProfileId(supabase, user.id);
+  let vendor: Awaited<ReturnType<typeof getVendorByOwnerProfileId>>;
+  try {
+    vendor = await getVendorByOwnerProfileId(supabase, user.id);
+  } catch (error) {
+    console.error("[stripe connect start]", error);
+    return NextResponse.json({ error: "Couldn't load your vendor account. Please try again." }, { status: 500 });
+  }
 
   if (!vendor) {
     return NextResponse.json({ error: "No vendor account found for this user." }, { status: 404 });

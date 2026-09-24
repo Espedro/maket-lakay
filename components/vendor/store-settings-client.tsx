@@ -96,12 +96,12 @@ function VendorPayoutsPanel({ vendorId }: { vendorId?: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ country }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         toast({
           title: "Couldn't start payout setup",
-          description: data.error ?? "Something went wrong. Please try again.",
+          description: data.error ?? `Something went wrong (error ${response.status}). Please try again.`,
           variant: "destructive",
         });
         return;
