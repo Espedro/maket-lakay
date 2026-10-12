@@ -103,7 +103,12 @@ Maket Lakay se yon mache an liy (marketplace) plizyè vandè pou Ayiti ak dyaspo
 - Screenshot vandè a (peyi: United States) montre *"Couldn't start payout setup — Something went wrong. Please try again."* Mesaj sa a parèt sèlman lè sèvè a kraze san l pa voye JSON, sa ki konfime bug ki anba a.
 - **Bug nou jwenn epi korije (poko deplwaye):** lè Stripe te voye yon erè, sèvè a te kraze (500) epi vandè a te wè sèlman *"Something went wrong"*. Kounye a `lib/stripe/connect.ts` retounen vrè mesaj Stripe la, konsa vandè a (ak nou) ap wè rezon an.
 
-**Kòz ki pi posib yo:**
+**✅ Kòz la jwenn (26 sept, apre deplwaman `400b174`):** Stripe reponn:
+> *"You must complete your platform profile to use Connect and create live connected accounts."*
+
+Sa vle di pwodiksyon an sou kle **live**, men **"platform profile" Connect la poko ranpli** nan dashboard Stripe live la. Se pa yon bug nan kòd la. Se pwopriyetè kont Stripe la ki dwe ranpli kesyonè a sou https://dashboard.stripe.com/connect/accounts/overview (an mòd live), epi mete branding Connect la (non, logo, koulè). Apre sa, vandè a ka re-eseye.
+
+**Kòz nou te konsidere anvan (pou referans):**
 1. **Peyi**: Stripe Connect pa sipòte Ayiti. Vandè a dwe gen yon kont labank / biznis Ozetazini, Kanada oswa Frans (sèl chwa yo nan fòm lan). Si li pa genyen, li pa ka fini.
 2. **Kle live vs test**: si pwodiksyon an sou kle **test**, onboarding lan se yon sandbox, epi vandè a pa p janm resevwa vrè lajan. Si li sou kle **live**, fòk Connect aktive epi "platform profile" la ranpli nan dashboard Stripe live la (Stripe te deja make kont lan 20 out).
 3. Yon lòt erè Stripe (imèl, enfòmasyon biznis…) ki kounye a ap parèt klè apre koreksyon an fin deplwaye.
